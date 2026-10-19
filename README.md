@@ -1,7 +1,15 @@
 # Wetteranzeige ESP32-8048S043
 
 Wetterstation für das Sunton-Board **ESP32-8048S043** (ESP32-S3, 4,3"-Display mit 800×480 Pixeln, kapazitiver Touch).
-Zeigt das aktuelle Wetter, den Verlauf der nächsten 24 Stunden und eine 6-Tage-Vorhersage. Die Daten kommen über WLAN von [Open-Meteo](https://open-meteo.com), ein API-Schlüssel ist nicht nötig.
+
+- Übersicht mit animiertem Wettersymbol, Regenhinweis für die nächsten 2 Stunden, 24-Stunden-Verlauf und 6 Tagen
+- Animiertes Regenradar des DWD mit 1 Stunde Vergangenheit und 2 Stunden Vorhersage
+- Amtliche Unwetterwarnungen des DWD
+- 48-Stunden-Verlauf und Tagesansichten
+- Sonnenbogen, Mondphase, UV-Index, Luftqualität und Pollen
+- Hintergrund, der Tageszeit und Wetter folgt
+
+Bedienung per Wischen und Antippen (siehe [fachlich.md](fachlich.md)). Die Daten kommen über WLAN von [Open-Meteo](https://open-meteo.com) und vom [Deutschen Wetterdienst](https://www.dwd.de), API-Schlüssel sind nicht nötig.
 
 ## Voraussetzungen
 
@@ -35,20 +43,27 @@ pio device monitor                               # serielle Ausgabe (115200 Baud
 
 | Pfad | Inhalt |
 |---|---|
-| `src/main.cpp` | Ablauf: WLAN, Abruf-Zeitplan, Touch, Neuzeichnen |
+| `src/main.cpp` | Ablauf: WLAN, Abrufplan, Gesten, Neuzeichnen und Animation, Testbefehle |
 | `src/lcd.*` | RGB-Display über den ESP-IDF-Treiber (Bounce Buffer, zwei Bildspeicher), Hintergrundbeleuchtung |
-| `src/touch.*` | Touch-Controller GT911 über I²C |
-| `src/weather.*` | Standort und Wetterdaten (Open-Meteo, ip-api.com) |
-| `src/ui.*` | Layout und Zeichnen mit LovyanGFX |
-| `src/icons.*` | Wettersymbole aus Grundformen |
-| `include/fonts/` | Erzeugte Schriften mit Umlauten (nicht von Hand bearbeiten) |
+| `src/touch.*` | Touch-Controller GT911, Tippen und Wischen |
+| `src/weather.*`, `air.*`, `warnings.*`, `radar.*` | Daten von Open-Meteo und DWD |
+| `src/astro.*`, `theme.*` | Mondphase, Himmelsfarben |
+| `src/ui*.*`, `icons.*` | Seiten, Zeichnen mit LovyanGFX, animierte Wettersymbole |
+| `include/fonts/` | Erzeugte Schriften (nicht von Hand bearbeiten) |
 | `tools/make_vlw.py` | Erzeugt die Schriften aus DejaVu Sans |
+| `tools/screenshot.py` | Holt ein Bildschirmfoto über die serielle Schnittstelle |
 
 ## Dokumentation
 
 - [fachlich.md](fachlich.md): was die Anzeige zeigt und wie sie sich verhält
 - [technisch.md](technisch.md): Hardware, Treiber, Konfiguration, Datenquellen
 - [entwicklung.md](entwicklung.md): Verlauf der Entwicklung mit Entscheidungen und Problemen
+
+## Quellen und Lizenzen
+
+- Wetter, Luftqualität und Pollen: [Open-Meteo](https://open-meteo.com) (CC BY 4.0)
+- Radar und Warnungen: [Deutscher Wetterdienst](https://www.dwd.de), Quelle wird auf der Radarseite genannt
+- Reliefkarte: Natural Earth (gemeinfrei), über den Kartendienst des DWD
 
 ## Schriften
 

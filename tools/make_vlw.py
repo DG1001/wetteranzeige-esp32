@@ -13,13 +13,16 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "include" / "fonts"
 
 ASCII = "".join(chr(c) for c in range(0x20, 0x7F))
-TEXT = ASCII + "ÄÖÜäöüß°·–…"
+LATIN1 = "".join(chr(c) for c in range(0xA0, 0x100))
+# Latin-1 und typografische Zeichen, wie sie in Texten des DWD vorkommen
+TEXT = ASCII + LATIN1 + "–—‘’‚“”„…•€"
 DIGITS = " -+0123456789°:.%"
 
 # (Name, TTF-Datei, Pixelgröße, Zeichensatz)
 FONTS = [
     ("font_small", "DejaVuSans.ttf", 18, TEXT),
     ("font_text", "DejaVuSans.ttf", 24, TEXT),
+    ("font_title", "DejaVuSans-Bold.ttf", 22, TEXT),
     ("font_bold", "DejaVuSans-Bold.ttf", 30, TEXT),
     ("font_clock", "DejaVuSans-Bold.ttf", 52, DIGITS),
     ("font_huge", "DejaVuSans-Bold.ttf", 112, DIGITS),

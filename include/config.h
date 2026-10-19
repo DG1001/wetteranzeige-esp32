@@ -8,6 +8,9 @@
 
 // Abstand zwischen zwei Wetterabrufen
 #define WEATHER_INTERVAL_MS (10UL * 60UL * 1000UL)
+// Abstand der Abrufe von Unwetterwarnungen (DWD) und Luftqualität/Pollen
+#define WARNINGS_INTERVAL_MS (5UL * 60UL * 1000UL)
+#define AIR_INTERVAL_MS (30UL * 60UL * 1000UL)
 // Wartezeit bis zum nächsten Versuch, wenn ein Abruf fehlschlägt
 #define WEATHER_RETRY_MS (60UL * 1000UL)
 

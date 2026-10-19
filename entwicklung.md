@@ -69,8 +69,51 @@ Die Farben stimmen, und auch beim Antippen springt das Bild nicht mehr. Bestäti
 - Git-Repository angelegt mit README, `fachlich.md`, `technisch.md` und dieser Datei
 - Die drei Dokumente werden bei jeder Änderung mitgepflegt (siehe `CLAUDE.md`).
 
+## 2026-10-19: Radar, Warnungen, Animationen, Detailseiten, Luft & Pollen, Himmel
+
+Gewünscht waren: animiertes Regenradar, Unwetterwarnungen, animierte Wettersymbole, Detailseiten per Touch, Luftqualität/UV/Pollen, Sonnenbogen und Mondphase sowie ein Hintergrund, der Tageszeit und Wetter folgt.
+
+### Datenquellen: Entscheidungen
+- **Radar vom DWD-Kartendienst (WMS)** statt Kacheldiensten: Ausschnitt und Bildgröße frei wählbar, ein Bild je Zeitpunkt, mit Transparenz. Vorher am Mac geprüft: `Niederschlagsradar` liefert Messungen der Vergangenheit **und** eine Vorhersage bis 2 Stunden, je etwa 9 KB PNG.
+- **Hintergrundkarte** aus drei DWD-Ebenen in **einer** Anfrage (Relief, Flüsse, Landesgrenzen), auf dem Gerät abgedunkelt. Die Kreisebene war mit grüner Füllung unbrauchbar, die Ebene „Basislayer“ gibt es nicht. Städte werden deshalb selbst beschriftet.
+- **Warnungen über WFS mit serverseitigem Punktfilter** statt der bundesweiten JSON-Datei (`warnings.json` kann bei Unwetterlagen sehr groß werden). Antwort unter 1 KB. Getestet mit Norden und Helgoland, die zu der Zeit Warnungen hatten.
+- **Luftqualität und Pollen von Open-Meteo**, ohne Schlüssel und im selben Stil wie das Wetter
+- **Wetterabfrage erweitert:** gestern (für den Vergleich der Tageslänge), 7 Tage, stündliche Details, 15-Minuten-Regen für den Regenhinweis
+- **Mondphase lokal berechnet** (mittlerer Mondlauf), statt eine weitere Datenquelle zu nutzen
+
+### Oberfläche: Entscheidungen
+- **Seiten per Wischen** (Übersicht, Radar, 48 Stunden, Himmel & Luft) und Unterseiten per Antippen (Tag, Warnungen). Die Übersicht blieb fast unverändert, das Warnsymbol nutzt den freien Platz in der Kopfzeile.
+- **Animation nur im animierten Bereich:** Nach jedem vollständigen Bild wird es in den zweiten Bildspeicher kopiert. Danach erneuert jedes Animationsbild nur den Ausschnitt des Symbols bzw. die Radarkarte. Ein komplettes Neuzeichnen 20-mal pro Sekunde wäre zu teuer gewesen.
+- **Radarbilder als PNG im Speicher, dekodiert beim Anzeigen.** Dekodiert hätten 19 Bilder rund 12 MB gebraucht.
+- **Schrittweises Laden** (ein Abruf je Schleifendurchlauf), damit Touch und Animation bedienbar bleiben
+- **Schriften auf Latin-1 und typografische Zeichen erweitert**, damit DWD-Texte („“ – …) vollständig erscheinen. Dazu kam eine fette 22-px-Schrift für Überschriften.
+- **Dithering** für die Himmelsverläufe: In RGB565 waren deutliche Farbstufen zu sehen.
+
+### Werkzeug: Bildschirmfotos über die serielle Schnittstelle
+Damit das Layout ohne Fotos vom Nutzer geprüft werden kann, gibt es Testbefehle (`seite`, `tipp`, `wisch`, `warnung`, `foto`) und `tools/screenshot.py`. Probleme dabei:
+- Mit 921600 Baud gingen Daten verloren, deshalb 460800.
+- Ohne Absprache nach dem Umschalten der Baudrate fehlten Bytes am Anfang, die Bilder waren verschoben und farblich verfälscht. Jetzt wartet das Board auf ein „G“ vom Rechner.
+- Unter macOS startet das Board beim Öffnen des Ports meist neu (CH340, DTR/RTS), auch wenn DTR/RTS vorher gesetzt werden. Während der Entwicklung hielt deshalb ein Hintergrundprozess den Port offen.
+- Ein Testbild-Befehl wurde ausprobiert und wieder entfernt: Der nächste Minutenwechsel hat es überzeichnet.
+
+### Probleme und Lösungen
+| Problem | Ursache | Lösung |
+|---|---|---|
+| Uhr zeigte „--:--“, obwohl die Zeit gestellt war | `getLocalTime(…, 0)` vergleicht zwei `millis()`-Werte; vermutlich lag durch den häufigen Display-Interrupt eine Millisekunde dazwischen | Eigene Funktion `localNow()` mit `time()`/`localtime_r()` |
+| Wochentag überlappte Wettersymbole (48 Stunden) | Beschriftung im Diagramm | In die Titelzeile, am rechten Rand links von der Linie |
+| Faktenzeile der Tagesansicht zu breit, „km/h“ in der Uhrzeit-Zeile | Layout | Kürzerer Text, Einheiten an die Zeilenbeschriftung, Zeile „Uhr“ |
+| Schadstoffzeile lief über den Rand | Einheit am Zeilenende | Einheit in die Titelzeile |
+| **Einzelne Pixel flackerten am linken Rand** (Nutzer) | Mit den Animationen ist viel mehr PSRAM-Verkehr da, der Bounce Buffer wurde nicht immer rechtzeitig gefüllt | Weniger Animationslast (12 statt 20 Bilder/s, Radar 2 Bilder/s) und längere Austastlücke, siehe unten |
+| **Bild um einige Zeilen nach oben verschoben, obere Zeilen unten sichtbar** (Nutzer) | Der Treiber startet die DMA in jedem VSYNC neu (`CONFIG_LCD_RGB_RESTART_IN_VSYNC`). Mit nur 4 Zeilen Back Porch war der Neustart unter Last nicht rechtzeitig fertig. Der Versuch mit 20 statt 10 Zeilen Bounce Buffer machte es schlimmer, weil das Füllen beim Neustart länger dauert. Mit 12 Zeilen Back Porch blieben noch 2–3 Zeilen Versatz. | Senkrechte Austastlücke auf typische Werte: Back Porch 23, Front Porch 22, Bounce Buffer wieder 10 Zeilen, Pixeltakt 16 MHz (etwa 36 Bilder/s). Danach kein Flackern und keine Verschiebung mehr, bestätigt vom Nutzer. |
+| Ein Build dauerte etwa 15 Minuten | pioarduino hat die Arduino-Bibliotheken erneut gebaut, Auslöser unklar | beobachten |
+
+### Noch nicht am Gerät gesehen
+Während der Entwicklung war es trocken. Deshalb sind Radarbilder mit Niederschlag, der Regenhinweis bei Regen und die Animation von Regen und Schnee im großen Symbol am Display noch nicht beobachtet worden. Auch die Dämmerungsfarben wurden nur im Code geprüft.
+
 ## Offene Punkte und Ideen
+- Radar, Regenhinweis und Regenanimation bei echtem Regen prüfen
+- Dämmerungsfarben am Gerät prüfen und bei Bedarf anpassen
 - Ort und WLAN ohne Neukompilieren ändern, z. B. über ein Einrichtungsportal oder eine Datei auf der SD-Karte
-- Helligkeit zusätzlich nach Uhrzeit steuern, nicht nur nach Tag und Nacht
-- Zertifikat von Open-Meteo prüfen, statt `setInsecure()` zu verwenden
 - Updates über WLAN (OTA)
+- Nachtmodus mit nur großer Uhr oder ganz abgeschaltetem Display
+- Zertifikate prüfen, statt `setInsecure()` zu verwenden

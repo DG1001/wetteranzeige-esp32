@@ -39,6 +39,7 @@ void attachCanvas() { sprite.setBuffer(frameBuffers[back], WIDTH, HEIGHT, 16); }
 bool begin() {
   esp_lcd_rgb_panel_config_t cfg = {};
   cfg.clk_src = LCD_CLK_SRC_DEFAULT;
+  // 16 MHz bei 529 Zeilen ergibt 36 Bilder/s. Bei 12 MHz (29 Bilder/s) zeigt das Panel nur sein Testbild.
   cfg.timings.pclk_hz = 16 * 1000 * 1000;
   cfg.timings.h_res = WIDTH;
   cfg.timings.v_res = HEIGHT;
@@ -46,13 +47,17 @@ bool begin() {
   cfg.timings.hsync_back_porch = 16;
   cfg.timings.hsync_front_porch = 8;
   cfg.timings.vsync_pulse_width = 4;
-  cfg.timings.vsync_back_porch = 4;
-  cfg.timings.vsync_front_porch = 4;
+  // Der Treiber startet die DMA in jeder senkrechten Austastlücke neu (CONFIG_LCD_RGB_RESTART_IN_VSYNC).
+  // Mit kurzer Lücke (4 bzw. 12 Zeilen) kam der Neustart unter Last zu spät, das Bild war um einige
+  // Zeilen verschoben. Daher typische Werte für 800x480-Panels.
+  cfg.timings.vsync_back_porch = 23;
+  cfg.timings.vsync_front_porch = 22;
   cfg.timings.flags.pclk_active_neg = 1;
   cfg.data_width = 16;
   cfg.bits_per_pixel = 16;
   cfg.num_fbs = 2;
-  // Die CPU kopiert jeweils 10 Zeilen aus dem PSRAM in internen Speicher, von dort liest das Display
+  // Die CPU kopiert jeweils 10 Zeilen aus dem PSRAM in internen Speicher, von dort liest das Display.
+  // 20 Zeilen brauchten beim Bildwechsel zu lange zum Füllen (Bild verschoben).
   cfg.bounce_buffer_size_px = WIDTH * 10;
   cfg.hsync_gpio_num = 39;
   cfg.vsync_gpio_num = 41;
@@ -93,6 +98,20 @@ void show() {
   attachCanvas();
 }
 
+void syncBack() { memcpy(frameBuffers[back], frameBuffers[back ^ 1], WIDTH * HEIGHT * 2); }
+
+void saveRect(uint16_t* buf, int x, int y, int w, int h) {
+  auto* fb = static_cast<uint16_t*>(frameBuffers[back]);
+  for (int row = 0; row < h; row++) memcpy(buf + row * w, fb + (y + row) * WIDTH + x, w * 2);
+}
+
+void restoreRect(const uint16_t* buf, int x, int y, int w, int h) {
+  auto* fb = static_cast<uint16_t*>(frameBuffers[back]);
+  for (int row = 0; row < h; row++) memcpy(fb + (y + row) * WIDTH + x, buf + row * w, w * 2);
+}
+
 void setBrightness(uint8_t value) { ledcWrite(PIN_BACKLIGHT, value); }
+
+const uint16_t* front() { return static_cast<const uint16_t*>(frameBuffers[back ^ 1]); }
 
 }  // namespace lcd

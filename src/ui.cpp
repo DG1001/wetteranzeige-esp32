@@ -1,202 +1,220 @@
 #include "ui.h"
 
+#include <esp_heap_caps.h>
 #include <math.h>
-#include <time.h>
 
-#include "fonts/font_bold.h"
-#include "fonts/font_clock.h"
-#include "fonts/font_huge.h"
-#include "fonts/font_small.h"
-#include "fonts/font_text.h"
 #include "icons.h"
 #include "lcd.h"
+#include "radar.h"
+#include "ui_common.h"
+#include "ui_pages.h"
+
+namespace ui {
 
 namespace {
 
-struct Theme {
-  uint32_t bgTop, bgBottom, card, text, dim;
-};
-constexpr Theme DAY = {0x1C4A75u, 0x0E2238u, 0x234E78u, 0xFFFFFFu, 0xA9C1DBu};
-constexpr Theme NIGHT = {0x0E1830u, 0x050A14u, 0x16233Du, 0xF2F4F8u, 0x8593ABu};
-constexpr uint32_t RAIN = 0x5AAEFFu;
-constexpr uint32_t RAIN_BAR = 0x2F6DAAu;
-constexpr uint32_t WARN = 0xFF8A65u;
-constexpr uint32_t CURVE = 0xFFC23Du;
+constexpr int MAP_Y = HEADER_H + 2;
+constexpr float FRAME_S = 0.5f;  // Anzeigedauer eines Radarbilds
+constexpr float HOLD_S = 1.2f;   // Pause am Ende der Bildfolge
 
-const char* const WEEKDAYS[] = {"Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"};
-const char* const WEEKDAYS_SHORT[] = {"So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"};
-const char* const MONTHS[] = {"Januar", "Februar", "März",      "April",   "Mai",      "Juni",
-                              "Juli",   "August",  "September", "Oktober", "November", "Dezember"};
+Theme theme;
+uint16_t* iconBackground = nullptr;  // Hintergrund unter dem animierten Wettersymbol
+int shownFrame = -1;
 
-LGFX_Sprite& canvas = lcd::canvas();
-const uint8_t* currentFont = nullptr;
+uint32_t timeColor(int frame) { return frame < radar::NOW_FRAME ? 0xB0BCCCu : frame == radar::NOW_FRAME ? 0xFFFFFFu : RAIN; }
 
-void font(const uint8_t* f) {
-  if (f != currentFont) {
-    canvas.loadFont(f);
-    currentFont = f;
+void shadowText(const char* s, int x, int y, const uint8_t* f, uint32_t color, textdatum_t datum) {
+  text(s, x + 1, y + 1, f, 0x000000, datum);
+  text(s, x, y, f, color, datum);
+}
+
+// Beschriftung der Karte: eigener Ort hervorgehoben, andere Orte nur ohne Überlappung
+void mapLabels(const Model& m) {
+  struct Box {
+    int x, y, w, h;
+  };
+  Box used[48];
+  int usedCount = 0;
+  auto isFree = [&](const Box& b) {
+    if (b.x < 4 || b.x + b.w > W - 4 || b.y < MAP_Y + 4 || b.y + b.h > 412) return false;
+    for (int i = 0; i < usedCount; i++) {
+      const Box& u = used[i];
+      if (b.x < u.x + u.w && u.x < b.x + b.w && b.y < u.y + u.h && u.y < b.y + b.h) return false;
+    }
+    return true;
+  };
+  used[usedCount++] = {8, MAP_Y + 6, 250, 56};  // Titel oben links
+
+  int hx, hy;
+  if (radar::project(m.loc.lat, m.loc.lon, hx, hy)) {
+    hy += MAP_Y;
+    canvas.drawCircle(hx, hy, 7, 0xFFFFFFu);
+    canvas.drawCircle(hx, hy, 8, 0x000000u);
+    canvas.fillSmoothCircle(hx, hy, 3, 0xFFFFFFu);
+    int w = textWidth(m.loc.city, FONT_TITLE);
+    shadowText(m.loc.city, hx + 12, hy, FONT_TITLE, 0xFFFFFFu, middle_left);
+    used[usedCount++] = {hx - 10, hy - 14, w + 26, 28};
+  }
+
+  int count;
+  const radar::City* cities = radar::cities(count);
+  for (int i = 0; i < count && usedCount < 48; i++) {
+    int x, y;
+    if (!radar::project(cities[i].lat, cities[i].lon, x, y)) continue;
+    y += MAP_Y;
+    int w = textWidth(cities[i].name, FONT_SMALL);
+    Box b = {x - 5, y - 10, w + 16, 20};
+    if (!isFree(b)) continue;
+    used[usedCount++] = b;
+    canvas.fillSmoothCircle(x, y, 3, 0xD8DEE8u);
+    shadowText(cities[i].name, x + 8, y, FONT_SMALL, 0xD8DEE8u, middle_left);
   }
 }
 
-void text(const char* s, int x, int y, const uint8_t* f, uint32_t color, textdatum_t datum) {
-  font(f);
-  canvas.setTextColor(color);
-  canvas.setTextDatum(datum);
-  canvas.drawString(s, x, y);
-}
+void timeline(const Model& m, int frame) {
+  const int y = 418, h = 54;
+  canvas.fillSmoothRoundRect(12, y, 776, h, 12, 0x0B1220u);
+  char buf[48];
 
-int textWidth(const char* s, const uint8_t* f) {
-  font(f);
-  return canvas.textWidth(s);
-}
+  const int bx0 = 290, bx1 = 764, by = y + 20;
+  auto fx = [&](int i) { return bx0 + (bx1 - bx0) * i / (radar::FRAMES - 1); };
 
-void formatTemp(char* buf, size_t len, float t) { snprintf(buf, len, "%d°", (int)lroundf(t)); }
-
-const char* compass(int deg) {
-  static const char* const DIRS[] = {"N", "NO", "O", "SO", "S", "SW", "W", "NW"};
-  return DIRS[((deg + 22) % 360) / 45];
-}
-
-// Farbe des Hintergrundverlaufs in Höhe y
-uint32_t backgroundAt(const Theme& t, int y) {
-  uint32_t c = 0;
-  for (int shift = 0; shift <= 16; shift += 8) {
-    int a = (t.bgTop >> shift) & 0xFF, b = (t.bgBottom >> shift) & 0xFF;
-    c |= (uint32_t)(a + (b - a) * y / 479) << shift;
-  }
-  return c;
-}
-
-void background(const Theme& t) {
-  canvas.fillGradientRect(0, 0, lcd::WIDTH, lcd::HEIGHT, t.bgTop, t.bgBottom, lgfx::VLINEAR);
-}
-
-void header(const Location& loc, const Theme& t, const char* status, bool warn) {
-  text(strlen(loc.city) ? loc.city : "Wetter", 24, 12, font_bold, t.text, top_left);
-
-  struct tm now;
-  char clock[8] = "--:--";
-  if (getLocalTime(&now, 0)) {
-    char date[48];
-    snprintf(date, sizeof(date), "%s, %d. %s %d", WEEKDAYS[now.tm_wday], now.tm_mday, MONTHS[now.tm_mon],
-             now.tm_year + 1900);
-    text(date, 26, 52, font_small, t.dim, top_left);
-    strftime(clock, sizeof(clock), "%H:%M", &now);
-  }
-  text(clock, 776, 48, font_clock, t.text, baseline_right);
-  text(status, 776, 56, font_small, warn ? WARN : t.dim, top_right);
-}
-
-void current(const Weather& w, const Theme& t) {
-  drawWeatherIcon(canvas, w.code, w.isDay, 120, 172, 170, backgroundAt(t, 150));
-
-  char buf[32];
-  formatTemp(buf, sizeof(buf), w.temp);
-  text(buf, 222, 204, font_huge, t.text, baseline_left);
-  text(weatherText(w.code), 228, 222, font_text, t.dim, top_left);
-
-  const int x = 500, y = 88, wd = 284, h = 170;
-  canvas.fillSmoothRoundRect(x, y, wd, h, 14, t.card);
-
-  char rows[5][24];
-  formatTemp(rows[0], sizeof(rows[0]), w.feels);
-  snprintf(rows[1], sizeof(rows[1]), "%d %%", w.humidity);
-  snprintf(rows[2], sizeof(rows[2]), "%d km/h %s", (int)lroundf(w.wind), compass(w.windDir));
-  snprintf(rows[3], sizeof(rows[3]), "%d hPa", (int)lroundf(w.pressure));
-  snprintf(rows[4], sizeof(rows[4]), "%s – %s", w.sunrise, w.sunset);
-  const char* const labels[] = {"Gefühlt", "Luftfeuchte", "Wind", "Luftdruck", "Sonne"};
-  for (int i = 0; i < 5; i++) {
-    int ry = y + 21 + i * 32;
-    text(labels[i], x + 18, ry, font_small, t.dim, middle_left);
-    text(rows[i], x + wd - 18, ry, font_text, t.text, middle_right);
-  }
-}
-
-void hourly(const Weather& w, const Theme& t) {
-  if (w.hours < 2) return;
-  canvas.fillSmoothRoundRect(16, 270, 768, 92, 14, t.card);
-
-  const int x0 = 52, x1 = 748, yTop = 302, yBottom = 330, barBase = 340;
-  float lo = w.hTemp[0], hi = w.hTemp[0];
-  for (int i = 1; i < w.hours; i++) {
-    lo = fminf(lo, w.hTemp[i]);
-    hi = fmaxf(hi, w.hTemp[i]);
-  }
-  if (hi - lo < 4) {
-    float mid = (hi + lo) / 2;
-    lo = mid - 2;
-    hi = mid + 2;
-  }
-
-  int px[Weather::HOURS], py[Weather::HOURS];
-  for (int i = 0; i < w.hours; i++) {
-    px[i] = x0 + (x1 - x0) * i / (w.hours - 1);
-    py[i] = yBottom - (int)lroundf((w.hTemp[i] - lo) / (hi - lo) * (yBottom - yTop));
-    if (w.hPrecip[i] > 0) {
-      int bh = w.hPrecip[i] * 40 / 100;
-      canvas.fillRect(px[i] - 10, barBase - bh, 20, bh, RAIN_BAR);
+  bool loading = radar::needsLoad();
+  if (!radar::hasMap() || (loading && !radar::hasFrame(radar::NOW_FRAME))) {
+    snprintf(buf, sizeof(buf), "Lade Radar … %d %%", (int)lroundf(radar::progress() * 100));
+    text(buf, 30, y + h / 2, FONT_TITLE, 0xFFFFFFu, middle_left);
+  } else {
+    time_t local = radar::frameTime(frame) + m.weather.utcOffset;
+    struct tm tm;
+    gmtime_r(&local, &tm);
+    const char* kind = frame < radar::NOW_FRAME ? "Messung" : frame == radar::NOW_FRAME ? "Aktuell" : "Vorhersage";
+    snprintf(buf, sizeof(buf), "%s %02d:%02d", kind, tm.tm_hour, tm.tm_min);
+    text(buf, 30, y + h / 2, FONT_TITLE, timeColor(frame), middle_left);
+    if (m.radarPaused) {
+      canvas.fillRect(254, y + 17, 5, 20, 0xFFFFFFu);
+      canvas.fillRect(264, y + 17, 5, 20, 0xFFFFFFu);
     }
   }
-  for (int i = 1; i < w.hours; i++) canvas.drawWideLine(px[i - 1], py[i - 1], px[i], py[i], 1.5f, CURVE);
 
-  char buf[16];
-  for (int i = 0; i < w.hours; i += 3) {
-    canvas.fillSmoothCircle(px[i], py[i], 4, CURVE);
-    formatTemp(buf, sizeof(buf), w.hTemp[i]);
-    text(buf, px[i], py[i] - 8, font_small, t.text, baseline_center);
-    if (i == 0) {
-      strcpy(buf, "Jetzt");
-    } else {
-      snprintf(buf, sizeof(buf), "%02d:00", w.hHour[i]);
-    }
-    text(buf, px[i], 351, font_small, t.dim, middle_center);
+  // Zeitleiste: Vergangenheit grau, Vorhersage blau, Markierung beim gezeigten Bild
+  canvas.drawWideLine(fx(0), by, fx(radar::NOW_FRAME), by, 1.5f, 0x7A8699u);
+  canvas.drawWideLine(fx(radar::NOW_FRAME), by, fx(radar::FRAMES - 1), by, 1.5f, RAIN_DIM);
+  for (int i = 0; i < radar::FRAMES; i++) {
+    uint32_t c = radar::hasFrame(i) ? timeColor(i) : 0x3A4455u;
+    canvas.fillSmoothCircle(fx(i), by, i == radar::NOW_FRAME ? 4 : 2, c);
   }
+  if (!loading || radar::hasFrame(frame)) {
+    canvas.fillSmoothCircle(fx(frame), by, 7, timeColor(frame));
+  }
+  const char* const marks[] = {"-1 h", "jetzt", "+1 h", "+2 h"};
+  const int markFrames[] = {0, radar::NOW_FRAME, radar::NOW_FRAME + 6, radar::NOW_FRAME + 12};
+  for (int i = 0; i < 4; i++) text(marks[i], fx(markFrames[i]), by + 22, FONT_SMALL, 0x9AA6B8u, middle_center);
 }
 
-void drop(int x, int y, uint32_t color) {
-  canvas.fillSmoothCircle(x, y + 3, 4, color);
-  canvas.fillTriangle(x - 4, y + 2, x + 4, y + 2, x, y - 6, color);
+void radarView(const Model& m, int frame) {
+  radar::draw(canvas, MAP_Y, frame);
+  canvas.fillSmoothRoundRect(8, MAP_Y + 6, 250, 56, 10, 0x0B1220u);
+  text("Regenradar", 22, MAP_Y + 12, FONT_TITLE, 0xFFFFFFu);
+  text("Daten: Deutscher Wetterdienst", 22, MAP_Y + 38, FONT_SMALL, 0x9AA6B8u);
+  mapLabels(m);
+  timeline(m, frame);
 }
 
-void daily(const Weather& w, const Theme& t) {
-  const int count = w.days, gap = 8, y = 370, h = 102;
-  const int tileW = (768 - gap * (count - 1)) / count;
-  char buf[16];
-  for (int i = 0; i < count; i++) {
-    const DayForecast& d = w.day[i];
-    int x = 16 + i * (tileW + gap);
-    int cx = x + tileW / 2;
-    canvas.fillSmoothRoundRect(x, y, tileW, h, 14, t.card);
+// Welches Radarbild zur Zeit t gehört; während des Ladens das aktuelle
+int radarFrameAt(const Model& m, float t) {
+  if (m.radarPaused && shownFrame >= 0) return shownFrame;
+  if (radar::needsLoad()) return radar::NOW_FRAME;
+  float cycle = radar::FRAMES * FRAME_S + HOLD_S;
+  int frame = (int)(fmodf(t, cycle) / FRAME_S);
+  return min(frame, radar::FRAMES - 1);
+}
 
-    text(i == 0 ? "Heute" : WEEKDAYS_SHORT[d.weekday], cx, y + 16, font_small, t.text, middle_center);
-    drawWeatherIcon(canvas, d.code, true, x + 34, y + 52, 50, t.card);
-    formatTemp(buf, sizeof(buf), d.tMax);
-    text(buf, x + tileW - 12, y + 44, font_text, t.text, middle_right);
-    formatTemp(buf, sizeof(buf), d.tMin);
-    text(buf, x + tileW - 12, y + 68, font_small, t.dim, middle_right);
-
-    snprintf(buf, sizeof(buf), "%d %%", d.precip);
-    int tw = textWidth(buf, font_small);
-    drop(cx - tw / 2 - 6, y + 88, RAIN);
-    text(buf, cx + 6, y + 89, font_small, RAIN, middle_center);
-  }
+void drawIcon(const Model& m, float t) {
+  drawWeatherIcon(canvas, m.weather.code, m.weather.isDay, ICON_CX, ICON_CY, ICON_SIZE, skyAt(theme, ICON_CY), t);
 }
 
 }  // namespace
 
-void uiStatus(const char* title, const char* detail) {
-  background(NIGHT);
-  text(title, 400, 222, font_bold, NIGHT.text, middle_center);
-  text(detail, 400, 266, font_text, NIGHT.dim, middle_center);
+void status(const char* title, const char* detail) {
+  Theme t{0x0E1830u, 0x050A14u, 0xFFFFFFu, 0x8593ABu, 0xFFFFFFu, 18, true};
+  background(t);
+  text(title, 400, 222, FONT_BOLD, t.text, middle_center);
+  text(detail, 400, 266, FONT_TEXT, t.dim, middle_center);
   lcd::show();
+  lcd::syncBack();
 }
 
-void uiWeather(const Location& loc, const Weather& w, const char* status, bool warn) {
-  const Theme& t = w.isDay ? DAY : NIGHT;
-  background(t);
-  header(loc, t, status, warn);
-  current(w, t);
-  hourly(w, t);
-  daily(w, t);
+void render(const Model& m) {
+  theme = skyTheme(m.weather, minuteOfDay());
+  background(theme);
+  header(m, theme);
+
+  switch (m.page) {
+    case Page::Overview:
+      overview(m, theme);
+      if (!iconBackground) iconBackground = (uint16_t*)heap_caps_malloc(ICON_W * ICON_H * 2, MALLOC_CAP_SPIRAM);
+      if (iconBackground) lcd::saveRect(iconBackground, ICON_X, ICON_Y, ICON_W, ICON_H);
+      drawIcon(m, 0);
+      break;
+    case Page::Radar:
+      shownFrame = radarFrameAt(m, 0);
+      radarView(m, shownFrame);
+      break;
+    case Page::Hours:
+      hours(m, theme);
+      break;
+    case Page::SkyAir:
+      skyAir(m, theme);
+      break;
+    case Page::Day:
+      day(m, theme);
+      break;
+    case Page::Warnings:
+      warnings(m, theme);
+      break;
+  }
   lcd::show();
+  lcd::syncBack();
 }
+
+bool animated(const Model& m) { return m.page == Page::Overview || m.page == Page::Radar; }
+
+void animate(const Model& m, float t, bool force) {
+  if (m.page == Page::Overview && iconBackground) {
+    lcd::restoreRect(iconBackground, ICON_X, ICON_Y, ICON_W, ICON_H);
+    drawIcon(m, t);
+    lcd::show();
+  } else if (m.page == Page::Radar) {
+    int frame = radarFrameAt(m, t);
+    if (frame == shownFrame && !force) return;
+    shownFrame = frame;
+    radarView(m, frame);
+    lcd::show();
+  }
+}
+
+Target hit(const Model& m, int x, int y, int& day) {
+  if (m.warnings.count > 0 && (int)m.page < MAIN_PAGES && inRect(x, y, PILL_X, PILL_Y, PILL_W, PILL_H)) {
+    return Target::Warnings;
+  }
+  switch (m.page) {
+    case Page::Overview:
+      if (inRect(x, y, HOURLY_X, HOURLY_Y, HOURLY_W, HOURLY_H)) return Target::Hours;
+      for (int i = 0; i < TILES; i++) {
+        if (inRect(x, y, TILE_X + i * (TILE_W + TILE_GAP), TILE_Y, TILE_W, TILE_H)) {
+          day = Weather::TODAY + i;
+          return Target::Day;
+        }
+      }
+      return Target::Refresh;
+    case Page::Radar:
+      return Target::Pause;
+    case Page::Day:
+    case Page::Warnings:
+      return Target::Back;
+    default:
+      return Target::None;
+  }
+}
+
+}  // namespace ui

@@ -2,80 +2,129 @@
 
 ## Zweck
 
-Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Sie zeigt auf einen Blick, wie das Wetter jetzt ist, wie es sich in den nächsten Stunden entwickelt und wie die kommenden Tage werden.
+Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen Blick zeigt sie, wie das Wetter jetzt ist und wie es wird. Per Wischen und Antippen gibt es Details: Regenradar, Stundenverlauf, Tagesansichten, Sonne und Mond, Luftqualität und Pollen sowie amtliche Unwetterwarnungen.
 
-## Bildschirmaufbau (800×480)
+## Bedienung
 
-### Kopfzeile
-- **Ort**, links oben. Er ist in `include/config.h` fest eingestellt (Künzelsau) oder wird über die IP-Adresse bestimmt.
-- **Datum** ausgeschrieben, z. B. „Sonntag, 18. Oktober 2026“
-- **Uhrzeit** groß, rechts oben, im Format HH:MM
-- **Status** darunter klein:
-  - „Stand 22:40“: Zeitpunkt des letzten erfolgreichen Abrufs
-  - „Aktualisiere …“: nach dem Antippen, bis die neuen Daten da sind
-  - „Kein WLAN · Stand …“ (orange): WLAN getrennt, es werden die letzten Daten angezeigt
-  - „Abruf fehlgeschlagen · Stand …“ (orange): seit mehr als 30 Minuten kein erfolgreicher Abruf
-
-### Aktuelles Wetter
-- Großes **Wettersymbol** mit Sonne bzw. Mond je nach Tageszeit
-- **Temperatur** groß, auf ganze Grad gerundet
-- **Beschreibung**, z. B. „Teilweise bewölkt“
-- Kasten mit Details:
-  - Gefühlte Temperatur
-  - Luftfeuchte in %
-  - Wind in km/h mit Himmelsrichtung (N, NO, O, SO, S, SW, W, NW)
-  - Luftdruck in hPa (am Standort, nicht auf Meereshöhe umgerechnet)
-  - Sonnenaufgang und -untergang des heutigen Tages
-
-### Nächste 24 Stunden
-- Temperaturkurve, stündlich, beginnend mit der aktuellen Stunde
-- Alle 3 Stunden ein Punkt mit Temperatur und Uhrzeit, der erste mit „Jetzt“ beschriftet
-- Blaue Balken: Regenwahrscheinlichkeit pro Stunde (Balkenhöhe entspricht 0 bis 100 %)
-
-### 6-Tage-Vorhersage
-- Eine Kachel pro Tag, die erste „Heute“, danach die Wochentage (Mo, Di, …)
-- Wettersymbol (immer in der Tagesvariante), Höchst- und Tiefsttemperatur, höchste Regenwahrscheinlichkeit des Tages
-
-## Verhalten
-
-| Situation | Verhalten |
+| Geste | Wirkung |
 |---|---|
-| Start | „Verbinde mit WLAN …“, danach „Lade Wetterdaten …“ |
-| WLAN nicht erreichbar | Meldung mit Hinweis auf `include/secrets.h`; die Verbindung wird automatisch weiter versucht |
-| Regelmäßig | Wetterabruf alle 10 Minuten, Uhr wird jede Minute aktualisiert |
-| Abruf fehlgeschlagen | Neuer Versuch nach 1 Minute; die alten Daten bleiben sichtbar |
-| Antippen | Sofortiger neuer Abruf; ein gehaltener Finger löst nur einmal aus |
-| Tag/Nacht | Tagsüber blaues Farbschema und Helligkeit 220, nachts dunkles Schema und Helligkeit 60 (Werte in `config.h`). Grundlage ist das Feld „is_day“ von Open-Meteo, also Sonnenauf- und -untergang am Ort. |
+| Nach links / rechts wischen | Nächste / vorige Seite: Übersicht → Radar → 48 Stunden → Himmel & Luft |
+| Tageskachel antippen (Übersicht) | Tagesansicht dieses Tages |
+| In der Tagesansicht wischen | Nächster / voriger Tag |
+| Stundenkarte antippen (Übersicht) | Seite „48 Stunden“ |
+| Warnsymbol antippen (Kopfzeile) | Warnungen mit vollständigem Text |
+| Sonst auf der Übersicht antippen | Alle Daten sofort neu abrufen |
+| Radar antippen | Animation anhalten / fortsetzen |
+| Tagesansicht oder Warnungen antippen | Zurück zur Übersicht |
+
+Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Punkte unter der Kopfzeile zeigen, auf welcher der vier Wischseiten man ist.
+
+## Kopfzeile (auf allen Seiten)
+
+- **Ort**, links oben (in `include/config.h` fest eingestellt: Künzelsau)
+- **Datum** ausgeschrieben, z. B. „Montag, 19. Oktober 2026“
+- **Uhrzeit** groß, rechts oben
+- **Status** darunter:
+  - „Stand 22:40“: Zeitpunkt des letzten erfolgreichen Wetterabrufs
+  - „Aktualisiere …“: nach dem Antippen
+  - „Kein WLAN · Stand …“ bzw. „Abruf fehlgeschlagen · Stand …“ (orange), wenn keine aktuellen Daten da sind
+- **Warnsymbol** in der Mitte, nur wenn der DWD für den Ort warnt: Farbe der höchsten Warnstufe (gelb, orange, rot, violett), Name der Warnung, „+N“ bei weiteren Warnungen
+
+## Seiten
+
+### Übersicht
+- **Wettersymbol, animiert:** Sonnenstrahlen drehen sich, Wolken ziehen, Regen und Schnee fallen, Blitze zucken, nachts funkeln Sterne um den Mond
+- **Temperatur**, **Beschreibung** (z. B. „Teilweise bewölkt“)
+- **Regenhinweis für die nächsten 2 Stunden**, aus der 15-Minuten-Vorhersage:
+  - „Regen ab ca. 14:30“ bzw. „Regen endet gegen 15:15“ (blau, mit Tropfen)
+  - „Regen hält an“
+  - „Nächste 2 Stunden trocken“
+- **Details:** gefühlte Temperatur, Luftfeuchte, Wind mit Richtung, Luftdruck (am Standort), Sonnenauf- und -untergang
+- **Nächste 24 Stunden:** Temperaturkurve, Regenwahrscheinlichkeit als Balken
+- **6 Tage** ab heute: Symbol, Höchst- und Tiefstwert, Regenwahrscheinlichkeit
+
+### Regenradar
+- Karte von etwa 300 km × 150 km rund um den Ort: abgedunkeltes Relief, Flüsse, Landesgrenzen, Städte. Der eigene Ort ist hervorgehoben.
+- Niederschlag vom DWD von **1 Stunde vor bis 2 Stunden nach jetzt** in 10-Minuten-Schritten, als Endlosschleife
+- Zeitleiste: Vergangenheit grau („Messung“), letzte Messung weiß („Aktuell“), Vorhersage blau („Vorhersage“)
+- Die Bilder werden beim Öffnen der Seite geladen, das dauert einige Sekunden (Fortschritt in Prozent). Danach werden sie alle 10 Minuten erneuert.
+
+### 48 Stunden
+Stündlicher Verlauf ab jetzt:
+- Wettersymbol alle 3 Stunden (nachts mit Mond)
+- Temperaturkurve
+- Regen: helle Balken für die Wahrscheinlichkeit, kräftige für die Menge (4 mm/h entsprechen voller Höhe)
+- Wind und Böen in km/h, Uhrzeit
+- Tageswechsel als Linie mit Wochentag und Datum
+
+### Tagesansicht
+- Wochentag und Datum, Symbol, Beschreibung, Höchst- und Tiefstwert
+- Regenmenge und -wahrscheinlichkeit, stärkste Böe, höchster UV-Index, Sonnenauf- und -untergang
+- Stundenverlauf des Tages wie auf der Seite „48 Stunden“
+
+### Himmel & Luft
+- **Sonne:** Bogen von Aufgang bis Untergang mit dem aktuellen Sonnenstand, Tageslänge und Unterschied zu gestern. Nachts statt der Sonne „Aufgang morgen …“.
+- **Mond:** Phase als Bild, Name (z. B. „Erstes Viertel“), beleuchteter Anteil, nächster Voll- und Neumond. Berechnet wird mit dem mittleren Mondlauf, Abweichung bis etwa einen halben Tag.
+- **UV-Index:** aktueller Wert mit Einstufung und Farbskala, Höchstwert heute
+  - 0–2 niedrig, 3–5 mäßig, 6–7 hoch, 8–10 sehr hoch, ab 11 extrem
+- **Luftqualität:** Europäischer Luftqualitätsindex mit Einstufung, dazu Feinstaub PM2,5 und PM10, Ozon und Stickstoffdioxid in µg/m³
+  - 0–20 gut, 20–40 akzeptabel, 40–60 mäßig, 60–80 schlecht, 80–100 sehr schlecht, darüber extrem schlecht
+- **Pollen heute:** Erle, Birke, Gräser, Beifuß, Ambrosia mit „keine / gering / mittel / hoch“. Grundlage ist der Höchstwert der restlichen Stunden des Tages. Die Schwellen sind grob gewählt, in Körnern pro m³:
+
+  | Pollen | gering ab | mittel ab | hoch ab |
+  |---|---|---|---|
+  | Erle, Birke, Gräser | 1 | 10 | 50 |
+  | Beifuß | 1 | 10 | 30 |
+  | Ambrosia | 1 | 5 | 15 |
+
+### Warnungen
+Alle aktuellen amtlichen Warnungen und Vorabinformationen des DWD für die Gemeinde am Standort, nach Stufe sortiert. Jede Warnung zeigt Überschrift, Zeitraum, Beschreibung und Handlungsempfehlung. Lange Texte werden mit „…“ gekürzt.
+
+## Himmel als Hintergrund
+Der Hintergrund folgt Tageszeit und Wetter:
+- Tagsüber blau bei klarem Himmel, grau bei Bewölkung, dunkelgrau bei Regen, violett-grau bei Gewitter, hell graublau bei Schnee
+- Nachts dunkelblau, bei Bewölkung grauer
+- Morgen- und Abenddämmerung (je 50 Minuten vor und nach Sonnenauf- und -untergang) mit Übergang über ein warmes Orange, bei Bewölkung gedämpft
+- Karten auf dem Hintergrund wirken halbtransparent und folgen dem Verlauf.
+
+Die Helligkeit der Beleuchtung beträgt tagsüber 220 und nachts 60 (Werte in `config.h`).
+
+## Aktualisierung
+
+| Daten | Abstand | nach Fehler |
+|---|---|---|
+| Wetter | 10 min | 1 min |
+| Unwetterwarnungen | 5 min | 1 min |
+| Luftqualität und Pollen | 30 min | 1 min |
+| Radarbilder | beim Öffnen der Radarseite, wenn älter als 10 min | nächster Durchlauf |
+| Radarkarte | einmal nach dem Start | nächster Durchlauf |
+| Uhr und Hintergrund | jede Minute | – |
 
 ## Wetterzustände
 
-Die Beschreibung und das Symbol ergeben sich aus dem WMO-Wettercode, den Open-Meteo liefert.
+Beschreibung und Symbol ergeben sich aus dem WMO-Wettercode von Open-Meteo.
 
-| Code | Beschreibung | Symbol |
+| Code | Beschreibung | Symbol (Animation) |
 |---|---|---|
-| 0 | Klar | Sonne / Mond |
+| 0 | Klar | Sonne (Strahlen drehen sich) / Mond (Sterne funkeln) |
 | 1 | Überwiegend klar | Sonne/Mond mit kleiner Wolke |
 | 2 | Teilweise bewölkt | Sonne/Mond mit Wolke |
-| 3 | Bedeckt | zwei Wolken |
-| 45, 48 | Nebel, Nebel mit Reif | Wolke mit Nebelstreifen |
+| 3 | Bedeckt | zwei Wolken (ziehen gegeneinander) |
+| 45, 48 | Nebel, Nebel mit Reif | Wolke mit Nebelstreifen (wabern) |
 | 51, 53, 55 | Leichter / – / Starker Nieselregen | Wolke mit kurzen Tropfen |
 | 56, 57 | Gefrierender Niesel | Wolke mit kurzen Tropfen |
 | 61, 63, 65 | Leichter Regen / Regen / Starker Regen | Wolke mit Regen |
 | 66, 67 | Gefrierender Regen | Wolke mit Regen |
-| 71, 73, 75 | Leichter / – / Starker Schneefall | Wolke mit Flocken |
+| 71, 73, 75 | Leichter / – / Starker Schneefall | Wolke mit Flocken (schweben) |
 | 77 | Schneegriesel | Wolke mit Flocken |
 | 80, 81, 82 | Leichte / – / Heftige Regenschauer | Sonne/Mond, Wolke, Regen |
 | 85, 86 | Schneeschauer | Sonne/Mond, Wolke, Flocken |
-| 95 | Gewitter | dunkle Wolke mit Blitz |
+| 95 | Gewitter | dunkle Wolke mit Blitz (Doppelblitz etwa alle 3 s) |
 | 96, 99 | Gewitter mit Hagel | dunkle Wolke mit Blitz |
-
-## Zeit und Ort
-
-- Die Uhrzeit kommt per NTP aus dem Internet. Als Zeitzone gilt der UTC-Versatz, den Open-Meteo für den Ort liefert. Die Umstellung auf Sommer- oder Winterzeit wird damit spätestens beim nächsten Abruf übernommen, also nach höchstens 10 Minuten.
-- Wird der Ort über die IP-Adresse bestimmt, kann er einige Kilometer danebenliegen. Bestimmt wird er einmal nach dem Start.
 
 ## Bekannte Grenzen
 
 - Kein Einstellungsmenü auf dem Gerät. WLAN und Ort werden im Quellcode eingetragen.
-- Nur ein Ort.
-- Texte nur auf Deutsch. Die Schriften enthalten ASCII, deutsche Umlaute, ß, °, ·, – und …. Andere Sonderzeichen, etwa in Ortsnamen, werden nicht dargestellt.
+- Nur ein Ort. Warnungen und Radar gibt es nur für Deutschland.
+- Texte nur auf Deutsch. Die Schriften enthalten ASCII, Latin-1 und typografische Zeichen wie „“ – … €.
+- Radaranimation und Regenhinweis bei tatsächlichem Regen sind bisher nicht am Gerät beobachtet worden, weil es während der Entwicklung trocken war.
