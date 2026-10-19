@@ -11,3 +11,8 @@ struct MoonPhase {
 };
 
 MoonPhase moonPhase(time_t utc);
+
+// Tage seit 1970-01-01 für ein Datum (Algorithmus von Howard Hinnant)
+long daysFromCivil(int y, int m, int d);
+// Tage seit 1970-01-01 für das heutige Datum in Ortszeit
+long localDayNumber();

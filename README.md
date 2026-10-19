@@ -6,7 +6,8 @@ Wetterstation für das Sunton-Board **ESP32-8048S043** (ESP32-S3, 4,3"-Display m
 - Animiertes Regenradar des DWD mit 1 Stunde Vergangenheit und 2 Stunden Vorhersage
 - Amtliche Unwetterwarnungen des DWD
 - 48-Stunden-Verlauf und Tagesansichten
-- Sonnenbogen, Mondphase, UV-Index, Luftqualität und Pollen
+- Sonnenbogen, Mondphase, UV-Index, Luftqualität und Wasserbilanz für den Garten
+- Pollenflug und Biowetter des DWD
 - Beste Zeit für draußen mit Hinweisen (Frost, Gewitter, Schirm, UV, Wäsche …)
 - Hintergrund, der Tageszeit und Wetter folgt
 - Nachtmodus mit gedimmter Uhr oder dunklem Display
@@ -24,7 +25,7 @@ Bedienung per Wischen und Antippen (siehe [fachlich.md](fachlich.md)). Die Daten
 
 1. Firmware einmal per USB hochladen (siehe unten).
 2. Ohne eingerichtetes WLAN öffnet die Anzeige einen Hotspot „Wetteranzeige“. Den QR-Code auf dem Display scannen oder mit dem angezeigten Passwort verbinden, dann WLAN und Ort eintragen.
-3. Danach gibt es die Webseite im Heimnetz unter `http://wetteranzeige.local`. Benutzer ist `admin`, die PIN steht am Gerät: **2 Sekunden auf das Display drücken**. Dort lassen sich Ort, Helligkeit, Nachtmodus und WLAN einstellen, ein Bildschirmfoto holen und Firmware hochladen.
+3. Danach gibt es die Webseite im Heimnetz unter `http://wetteranzeige.local`. Benutzer ist `admin`, die PIN steht am Gerät: **2 Sekunden auf das Display drücken**. Dort lassen sich Ort, DWD-Regionen, Helligkeit, Nachtmodus und WLAN einstellen, ein Bildschirmfoto holen, Firmware hochladen und unter „Status und Log“ der Zustand des Geräts ansehen.
 
 Optional lassen sich WLAN-Daten schon beim Bauen mitgeben. Dazu `include/secrets.h.example` nach `include/secrets.h` kopieren und ausfüllen. Die Datei steht in `.gitignore` und dient nur als Vorgabe beim allerersten Start. Ort und Helligkeit für den ersten Start stehen in `include/config.h`.
 
@@ -58,7 +59,9 @@ Alternativ auf der Webseite unter „Firmware-Update“ die Datei `.pio/build/es
 | `src/outdoor.*` | Beste Zeit draußen und Hinweise |
 | `src/lcd.*` | RGB-Display über den ESP-IDF-Treiber (Bounce Buffer, zwei Bildspeicher), Hintergrundbeleuchtung |
 | `src/touch.*` | Touch-Controller GT911, Tippen und Wischen |
-| `src/weather.*`, `air.*`, `warnings.*`, `radar.*` | Daten von Open-Meteo und DWD |
+| `src/fetch.*` | Hintergrund-Task für alle Abrufe |
+| `src/weather.*`, `air.*`, `garden.*`, `warnings.*`, `radar.*`, `health.*` | Daten von Open-Meteo und DWD |
+| `src/log.*` | Log mit Ringpuffer für die Statusseite |
 | `src/astro.*`, `theme.*` | Mondphase, Himmelsfarben |
 | `src/ui*.*`, `icons.*` | Seiten, Zeichnen mit LovyanGFX, animierte Wettersymbole |
 | `include/fonts/` | Erzeugte Schriften (nicht von Hand bearbeiten) |

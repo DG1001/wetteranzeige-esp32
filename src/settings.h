@@ -17,6 +17,9 @@ struct Settings {
   bool nightOff;  // true = Display aus, false = gedimmte Uhr
   uint8_t brightClock;  // Helligkeit der Nachtuhr
   char pin[9] = "";  // Zugang zur Webseite, zum Einrichtungs-WLAN und für Updates
+  // Neue Felder nur hinten anfügen: ältere gespeicherte Einstellungen werden dann übernommen
+  int16_t pollenRegion;  // DWD-Pollenregion (Teilregion), siehe health.cpp
+  char bioZone;          // DWD-Biowetterzone 'A' bis 'K'
 };
 
 extern Settings settings;

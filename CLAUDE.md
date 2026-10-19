@@ -21,8 +21,9 @@ Die README nur anpassen, wenn sich Einrichtung, Build oder Struktur ändern.
 
 ## Grenzen der Hardware
 
-- Nicht unter etwa 33 Bilder/s gehen (bei 12 MHz und 29 Bildern/s zeigt das Panel seinen Selbsttest).
+- Pixeltakt 22 MHz (50 Bilder/s) beibehalten: Darunter flimmern helle Flächen sichtbar (bei 36 Bildern/s deutlich), bei 29 Bildern/s zeigt das Panel nur noch seinen Selbsttest. Mehr als etwa 22 MHz schafft der PSRAM nicht zuverlässig.
 - Die senkrechte Austastlücke (Back Porch 23, Front Porch 22) nicht verkürzen und den Bounce Buffer nicht vergrößern, sonst verschiebt sich das Bild unter Last um einige Zeilen.
 - PSRAM-Last klein halten: Gezeichnet wird in den unsichtbaren Bildspeicher, danach `lcd::show()`. Animationen erneuern nur ihren Ausschnitt und laufen mit höchstens etwa 12 Bildern/s.
 - `include/secrets.h` nie einchecken oder ausgeben.
-- Wird `struct Settings` geändert, `VERSION` in `settings.cpp` erhöhen. Die gespeicherten Einstellungen werden dann auf die Vorgaben zurückgesetzt, das WLAN muss also neu eingerichtet werden (oder kommt aus `secrets.h`).
+- Neue Felder in `struct Settings` nur hinten anfügen, dann bleiben gespeicherte Einstellungen erhalten. `VERSION` nur bei unverträglichen Änderungen erhöhen, denn dann gehen WLAN und PIN verloren.
+- Netzwerkzugriffe gehören in den Abruf-Task (`fetch.cpp`), nicht in die Hauptschleife. Das Modell wird nur unter `ModelLock` geändert oder gelesen.

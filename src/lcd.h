@@ -21,6 +21,8 @@ void syncBack();
 void saveRect(uint16_t* buf, int x, int y, int w, int h);
 void restoreRect(const uint16_t* buf, int x, int y, int w, int h);
 void setBrightness(uint8_t value);
+// Pixeltakt im Betrieb ändern (wirkt ab dem nächsten Bild), z. B. zum Vergleich der Bildwiederholrate
+void setPixelClock(uint32_t hz);
 // Das gerade angezeigte Bild (RGB565 mit vertauschten Bytes), z. B. für Bildschirmfotos
 const uint16_t* front();
 

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include "astro.h"
+#include "log.h"
 #include "net.h"
 
 namespace {
@@ -13,16 +15,6 @@ int levelOf(const char* severity) {
   if (!strcmp(severity, "Severe")) return 3;
   if (!strcmp(severity, "Moderate")) return 2;
   return 1;
-}
-
-// Tage seit 1970-01-01 für ein Datum (Algorithmus von Howard Hinnant)
-long daysFromCivil(int y, int m, int d) {
-  y -= m <= 2;
-  long era = (y >= 0 ? y : y - 399) / 400;
-  long yoe = y - era * 400;
-  long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-  long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-  return era * 146097 + doe - 719468;
 }
 
 // "JJJJ-MM-TTTHH:MM:SSZ" (UTC) in Ortszeit, formatiert als „Mo 14:00“
@@ -74,6 +66,6 @@ bool fetchWarnings(const Location& loc, int utcOffset, Warnings& out) {
   }
   std::sort(out.item, out.item + out.count, [](const Warning& a, const Warning& b) { return a.level > b.level; });
   out.valid = true;
-  Serial.printf("Warnungen: %d\n", out.count);
+  logf("Warnungen: %d", out.count);
   return true;
 }

@@ -1,5 +1,7 @@
 #include "weather.h"
 
+#include "log.h"
+
 #include "net.h"
 #include "settings.h"
 
@@ -19,7 +21,7 @@ bool geocode(const char* name, Location& loc) {
   strlcpy(loc.city, best["name"] | name, sizeof(loc.city));
   loc.lat = best["latitude"];
   loc.lon = best["longitude"];
-  Serial.printf("Ort gefunden: %s (%.4f, %.4f)\n", loc.city, loc.lat, loc.lon);
+  logf("Ort gefunden: %s (%.4f, %.4f)", loc.city, loc.lat, loc.lon);
   return true;
 }
 
@@ -37,7 +39,7 @@ bool locate(Location& loc) {
   strlcpy(loc.city, doc["city"] | "", sizeof(loc.city));
   loc.lat = doc["lat"];
   loc.lon = doc["lon"];
-  Serial.printf("Standort: %s (%.4f, %.4f)\n", loc.city, loc.lat, loc.lon);
+  logf("Standort: %s (%.4f, %.4f)", loc.city, loc.lat, loc.lon);
   return true;
 }
 
@@ -140,7 +142,7 @@ bool fetchWeather(const Location& loc, Weather& w) {
   }
 
   w.valid = true;
-  Serial.printf("Wetter: %.1f °C, Code %d, %d Stunden (jetzt %d), %d Tage\n", w.temp, w.code, w.hours, w.nowHour,
+  logf("Wetter: %.1f °C, Code %d, %d Stunden (jetzt %d), %d Tage", w.temp, w.code, w.hours, w.nowHour,
                 w.days);
   return true;
 }

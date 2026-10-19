@@ -265,6 +265,9 @@ void render(const Model& m) {
     case Page::SkyAir:
       skyAir(m, theme);
       break;
+    case Page::Health:
+      health(m, theme);
+      break;
     case Page::Day:
       day(m, theme);
       break;

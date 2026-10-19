@@ -55,6 +55,7 @@ void formatDecimal(char* buf, size_t len, float v, int decimals);
 
 // Himmelsverlauf mit Dithering, damit in RGB565 keine Farbstufen sichtbar werden
 void background(const Theme& t);
+extern bool ditherEnabled;  // zum Vergleich abschaltbar (Testbefehl „dither“)
 // Halbtransparent wirkende Karte über dem Himmelsverlauf
 void glass(const Theme& t, int x, int y, int w, int h, int r = 14);
 void header(const Model& m, const Theme& t);

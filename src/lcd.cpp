@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
+#include <esp_system.h>
 #include <freertos/semphr.h>
 
 namespace lcd {
@@ -39,8 +40,10 @@ void attachCanvas() { sprite.setBuffer(frameBuffers[back], WIDTH, HEIGHT, 16); }
 bool begin() {
   esp_lcd_rgb_panel_config_t cfg = {};
   cfg.clk_src = LCD_CLK_SRC_DEFAULT;
-  // 16 MHz bei 529 Zeilen ergibt 36 Bilder/s. Bei 12 MHz (29 Bilder/s) zeigt das Panel nur sein Testbild.
-  cfg.timings.pclk_hz = 16 * 1000 * 1000;
+  // 22 MHz bei 828 x 529 Takten ergibt 50 Bilder/s. Mit 16 MHz (36 Bilder/s) flimmerten mittelhelle Flächen
+  // sichtbar, bei 12 MHz (29 Bilder/s) zeigt das Panel nur sein Testbild. Mehr als etwa 22 MHz schafft der
+  // PSRAM laut Espressif nicht zuverlässig.
+  cfg.timings.pclk_hz = 22 * 1000 * 1000;
   cfg.timings.h_res = WIDTH;
   cfg.timings.v_res = HEIGHT;
   cfg.timings.hsync_pulse_width = 4;
@@ -82,6 +85,11 @@ bool begin() {
   attachCanvas();
 
   ledcAttach(PIN_BACKLIGHT, BACKLIGHT_PWM_HZ, 8);
+  // Beim Neustart (z. B. nach einem Update) die Display-DMA anhalten; sonst griff dabei ein Watchdog
+  esp_register_shutdown_handler([] {
+    if (panel) esp_lcd_panel_del(panel);
+    panel = nullptr;
+  });
   return true;
 }
 
@@ -111,6 +119,10 @@ void restoreRect(const uint16_t* buf, int x, int y, int w, int h) {
 }
 
 void setBrightness(uint8_t value) { ledcWrite(PIN_BACKLIGHT, value); }
+
+void setPixelClock(uint32_t hz) {
+  if (panel) esp_lcd_rgb_panel_set_pclk(panel, hz);
+}
 
 const uint16_t* front() { return static_cast<const uint16_t*>(frameBuffers[back ^ 1]); }
 

@@ -1,9 +1,13 @@
 #pragma once
 
+#include "garden.h"
+#include "health.h"
 #include "weather.h"
 
 // Auswertung der Vorhersage für Aktivitäten draußen: bestes Zeitfenster und Hinweise
-enum class HintKind { Thunder, Ice, Storm, HeavyRain, Snow, Frost, GroundFrost, Umbrella, Heat, Uv, Fog, Wind, Laundry };
+enum class HintKind {
+  Thunder, Ice, Storm, HeavyRain, Snow, Frost, GroundFrost, Umbrella, Heat, Uv, Fog, Wind, Laundry, Pollen, Bio, Water
+};
 
 struct Hint {
   HintKind kind;
@@ -28,6 +32,6 @@ struct Outdoor {
 
 constexpr int GOOD_SCORE = 50;
 
-void evaluateOutdoor(const Weather& w, Outdoor& out);
+void evaluateOutdoor(const Weather& w, const Health& health, const Garden& garden, Outdoor& out);
 // Kurztext für die Übersicht, z. B. „Draußen ideal: 14–17 Uhr“
 void bestTimeText(const Outdoor& o, char* buf, size_t len);

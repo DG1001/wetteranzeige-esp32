@@ -1,5 +1,7 @@
 #include "touch.h"
 
+#include "log.h"
+
 #include <Arduino.h>
 #include <Wire.h>
 
@@ -67,7 +69,7 @@ bool begin() {
       rawHeight = h;
     }
   }
-  Serial.printf("Touch GT911 an 0x%02X, Auflösung %dx%d\n", address, rawWidth, rawHeight);
+  logf("Touch GT911 an 0x%02X, Auflösung %dx%d", address, rawWidth, rawHeight);
   return true;
 }
 

@@ -6,8 +6,12 @@
 #include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
+#include <esp_task_wdt.h>
 
+#include "fetch.h"
 #include "lcd.h"
+#include "log.h"
 #include "settings.h"
 #include "ui.h"
 
@@ -109,16 +113,20 @@ String wifiFields() {
 void handleRoot() {
   if (!authorized()) return;
   String b = "<div class=box>";
-  if (model && model->weather.valid) {
-    char line[160];
-    snprintf(line, sizeof(line), "<b>%s</b>: %.1f °C · %s<br><small>%s · IP %s</small>", esc(model->loc.city).c_str(),
-             model->weather.temp, esc(model->status).c_str(), WiFi.SSID().c_str(),
-             WiFi.localIP().toString().c_str());
-    b += line;
-  } else {
-    b += "Noch keine Wetterdaten";
+  {
+    ModelLock lock;
+    if (model && model->weather.valid) {
+      char line[160];
+      snprintf(line, sizeof(line), "<b>%s</b>: %.1f °C · %s<br><small>%s · IP %s</small>", esc(model->loc.city).c_str(),
+               model->weather.temp, esc(model->status).c_str(), WiFi.SSID().c_str(),
+               WiFi.localIP().toString().c_str());
+      b += line;
+    } else {
+      b += "Noch keine Wetterdaten";
+    }
   }
-  b += "</div><p><a href=/foto>Bildschirmfoto</a> · <a href=/update>Firmware-Update</a></p>";
+  b += "</div><p><a href=/foto>Bildschirmfoto</a> · <a href=/status>Status und Log</a> · "
+       "<a href=/update>Firmware-Update</a></p>";
 
   b += "<form method=post action=/einstellungen>";
   b += "<h2>Ort</h2><label>Ortsname</label><input name=city value=\"" + esc(settings.city) +
@@ -127,6 +135,18 @@ void handleRoot() {
   b += "<div class=row><div><label>Breite</label><input name=lat value='" +
        (settings.lat || settings.lon ? String(settings.lat, 4) : String()) + "'></div><div><label>Länge</label>"
        "<input name=lon value='" + (settings.lat || settings.lon ? String(settings.lon, 4) : String()) + "'></div></div>";
+
+  b += "<h2>Gesundheit (DWD)</h2><label>Region für den Pollenflug</label><select name=pollenRegion>";
+  for (int i = 0; i < POLLEN_REGION_COUNT; i++) {
+    b += "<option value=" + String(POLLEN_REGIONS[i].id) + (POLLEN_REGIONS[i].id == settings.pollenRegion ? " selected>" : ">") +
+         esc(POLLEN_REGIONS[i].name) + "</option>";
+  }
+  b += "</select><label>Zone für das Biowetter</label><select name=bioZone>";
+  for (int i = 0; i < BIO_ZONE_COUNT; i++) {
+    b += String("<option value=") + BIO_ZONES[i].id + (BIO_ZONES[i].id == settings.bioZone ? " selected>" : ">") +
+         esc(BIO_ZONES[i].name) + "</option>";
+  }
+  b += "</select>";
 
   b += "<h2>Helligkeit</h2><div class=row><div><label>Tag (0–255)</label><input name=brightDay type=number min=0 "
        "max=255 value=" + String(settings.brightDay) + "></div><div><label>Nacht (0–255)</label><input "
@@ -180,6 +200,17 @@ void handleSave() {
       settings.lat = newLat;
       settings.lon = newLon;
     }
+    c.location = true;
+  }
+
+  int region = server.arg("pollenRegion").toInt();
+  char zone = server.arg("bioZone").length() ? server.arg("bioZone")[0] : settings.bioZone;
+  if (region > 0 && region != settings.pollenRegion) {
+    settings.pollenRegion = region;
+    c.location = true;
+  }
+  if (zone >= 'A' && zone <= 'K' && zone != settings.bioZone) {
+    settings.bioZone = zone;
     c.location = true;
   }
 
@@ -259,6 +290,59 @@ void handleBitmap() {
   }
 }
 
+String ago(uint32_t at) {
+  if (!at) return "nie";
+  uint32_t s = (millis() - at) / 1000;
+  if (s < 120) return "vor " + String(s) + " s";
+  if (s < 7200) return "vor " + String(s / 60) + " min";
+  return "vor " + String(s / 3600) + " h";
+}
+
+const char* resetReason() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON: return "Einschalten";
+    case ESP_RST_SW: return "Neustart durch die Software";
+    case ESP_RST_PANIC: return "Absturz";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT: return "Watchdog";
+    case ESP_RST_BROWNOUT: return "Spannungseinbruch";
+    case ESP_RST_EXT: return "Reset-Taste";
+    default: return "sonstiger";
+  }
+}
+
+void handleStatus() {
+  if (!authorized()) return;
+  uint32_t up = millis() / 1000;
+  char line[200];
+  String b = "<div class=box>";
+  snprintf(line, sizeof(line), "Laufzeit: %lu d %lu h %lu min<br>Letzter Start: %s<br>Firmware vom %s %s<br>",
+           up / 86400, up / 3600 % 24, up / 60 % 60, resetReason(), __DATE__, __TIME__);
+  b += line;
+  snprintf(line, sizeof(line), "Interner Speicher: %u KB frei (niedrigster Wert %u KB)<br>PSRAM: %u KB frei<br>",
+           heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024, heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024,
+           heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
+  b += line;
+  snprintf(line, sizeof(line), "WLAN: %s, Signal %d dBm, IP %s", WiFi.SSID().c_str(), WiFi.RSSI(),
+           WiFi.localIP().toString().c_str());
+  b += line;
+  b += "</div><h2>Datenquellen</h2><div class=box>";
+  for (int i = 0; i < fetch::SOURCES; i++) {
+    const fetch::Source& src = fetch::source(i);
+    b += "<b>" + String(src.name) + "</b>: zuletzt erfolgreich " + ago(src.lastOk);
+    if (src.lastTry && !src.ok) b += ", <span style=color:#ff8a65>letzter Versuch fehlgeschlagen</span>";
+    if (src.failures) b += " <small>(" + String(src.failures) + " Fehler seit dem Start)</small>";
+    b += "<br>";
+  }
+  b += "</div><h2>Log</h2><div class=box><pre style='white-space:pre-wrap;font-size:.8em;margin:0'>";
+  String log;
+  logLines([](const char* l, void* ctx) { *static_cast<String*>(ctx) += esc(l) + "\n"; }, &log);
+  b += log;
+  b += "</pre></div><p><a href=/status>Neu laden</a> · <a href=/>Zurück</a></p>";
+  server.send(200, "text/html; charset=utf-8", page("Status", b));
+}
+
 void handleUpdatePage() {
   if (!authorized()) return;
   server.send(200, "text/html; charset=utf-8",
@@ -272,10 +356,12 @@ void handleUpdateUpload() {
   HTTPUpload& up = server.upload();
   if (!server.authenticate("admin", settings.pin)) return;
   if (up.status == UPLOAD_FILE_START) {
-    Serial.printf("Update: %s\n", up.filename.c_str());
+    fetch::pause(true);
+    logf("Update: %s", up.filename.c_str());
     ui::status("Firmware-Update", "Bitte nicht ausschalten …");
     Update.begin(UPDATE_SIZE_UNKNOWN);
   } else if (up.status == UPLOAD_FILE_WRITE) {
+    esp_task_wdt_reset();
     Update.write(up.buf, up.currentSize);
   } else if (up.status == UPLOAD_FILE_END) {
     Update.end(true);
@@ -290,6 +376,7 @@ void handleUpdateDone() {
                    ok ? "Die Anzeige startet neu." : String("Fehler: ") + Update.errorString()));
   delay(500);
   if (ok) ESP.restart();
+  fetch::pause(false);
 }
 
 // ---------------------------------------------------------------- Einrichtung
@@ -335,6 +422,7 @@ void setupServer() {
   server.on("/einstellungen", HTTP_POST, [] { portal ? handlePortalRedirect() : handleSave(); });
   server.on("/foto", HTTP_GET, [] { portal ? handlePortalRedirect() : handlePhoto(); });
   server.on("/foto.bmp", HTTP_GET, [] { portal ? handlePortalRedirect() : handleBitmap(); });
+  server.on("/status", HTTP_GET, [] { portal ? handlePortalRedirect() : handleStatus(); });
   server.on("/update", HTTP_GET, [] { portal ? handlePortalRedirect() : handleUpdatePage(); });
   server.on("/update", HTTP_POST, [] { portal ? handlePortalRedirect() : handleUpdateDone(); },
             [] { if (!portal) handleUpdateUpload(); });
@@ -362,9 +450,18 @@ void beginStation(const Model& m, void (*onChange)(const Changes&)) {
   ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.setPassword(settings.pin);
   ArduinoOTA.setMdnsEnabled(false);  // mDNS läuft schon
-  ArduinoOTA.onStart([] { ui::status("Firmware-Update", "Bitte nicht ausschalten …"); });
+  ArduinoOTA.onStart([] {
+    fetch::pause(true);
+    logf("Update über ArduinoOTA beginnt");
+    ui::status("Firmware-Update", "Bitte nicht ausschalten …");
+  });
+  ArduinoOTA.onProgress([](unsigned int, unsigned int) { esp_task_wdt_reset(); });
+  ArduinoOTA.onError([](ota_error_t e) {
+    logf("Update über ArduinoOTA fehlgeschlagen (%d)", (int)e);
+    fetch::pause(false);
+  });
   ArduinoOTA.begin();
-  Serial.printf("Webseite: http://%s.local/ bzw. http://%s/\n", HOSTNAME, WiFi.localIP().toString().c_str());
+  logf("Webseite: http://%s.local/ bzw. http://%s/", HOSTNAME, WiFi.localIP().toString().c_str());
 }
 
 void beginPortal() {
@@ -380,7 +477,7 @@ void beginPortal() {
   WiFi.softAP(AP_NAME, settings.pin);
   dns.start(53, "*", WiFi.softAPIP());
   setupServer();
-  Serial.println("Einrichtungs-WLAN gestartet");
+  logf("Einrichtungs-WLAN gestartet");
 }
 
 void loop() {

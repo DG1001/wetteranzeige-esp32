@@ -142,12 +142,49 @@ Gewünscht aus einer Liste von zwölf Vorschlägen: Einrichtung und Updates übe
 - Seiten Draußen, Nacht und Info sowie die wechselnde Zeile per Bildschirmfoto
 - Noch nicht getestet: Einrichtung mit einem Handy über den Hotspot (Captive-Portal-Erkennung von iOS/Android), Firmware-Upload über das Formular der Webseite, der Nachtmodus über eine echte Nacht und die meisten Hinweise bei passendem Wetter
 
+## 2026-10-19: Abrufe im Hintergrund, DWD-Pollenflug und -Biowetter, Gießhinweis, Robustheit
+
+Gewünscht: Pollenflug und Biowetter vom DWD, Gießhinweis, Robustheit für den Dauerbetrieb. Dazu eine Rückmeldung des Nutzers: Das Radar blockiert, bis alle Bilder geladen sind, und man kann solange nicht weiterblättern.
+
+### Entscheidungen
+- **Alle Abrufe in einen eigenen Task auf Kern 0.** Ursache des Blockierens war nicht nur das Radar: Jeder Abruf lief in der Hauptschleife, und währenddessen wurden Gesten nicht ausgewertet. Die Daten gehen über Zwischenspeicher und einen rekursiven Mutex (`ModelLock`) an die Oberfläche, das Radar hat eine eigene Sperre. Netzwerkzugriffe gehören seitdem grundsätzlich in diesen Task.
+- **DWD statt Open-Meteo für Pollen:** Der amtliche Pollenflug-Gefahrenindex ist für Allergiker die übliche Größe und hat 8 Pollenarten mit 3 Tagen. Die Modellwerte von Open-Meteo entfallen.
+- **Neue Wischseite „Gesundheit“** für Pollenflug und Biowetter. Auf „Himmel & Luft“ nimmt die Gartenbilanz den frei gewordenen Platz ein.
+- **Regionen fest hinterlegt** (27 Pollenregionen, 11 Biowetter-Zonen), Auswahl auf der Webseite. Eine automatische Zuordnung vom Ort zur Region hätte Polygone gebraucht.
+- **Gießhinweis** aus Regen minus Referenzverdunstung (FAO) der letzten 7 Tage, mit eigener kleiner Anfrage
+- **Robustheit:**
+  - Watchdog für die Hauptschleife
+  - Neustart bei hängendem Abruf-Task oder knappem Speicher
+  - Statusseite mit Log
+  - Zertifikatsprüfung mit der eingebauten Sammlung von ESP-IDF statt `setInsecure()`
+- **Einstellungen erweiterbar ohne Datenverlust:** Neue Felder werden hinten angefügt, ältere, kürzere gespeicherte Daten werden übernommen. So blieben WLAN und PIN beim Update erhalten.
+
+### Probleme und Lösungen
+| Problem | Ursache | Lösung |
+|---|---|---|
+| Biowetter: `IncompleteInput` | 109 KB direkt aus dem TLS-Datenstrom eingelesen, die Übertragung stockte | JSON erst vollständig in den PSRAM laden, dann auswerten (gilt jetzt für alle Abrufe) |
+| Update über WLAN brach mehrfach ab („Receive Error“, „Connection reset“) | Gleichzeitig lief ein TLS-Abruf im Hintergrund (dazu der alle Minute wiederholte, fehlschlagende Biowetter-Abruf) | Abrufe während eines Updates anhalten (`fetch::pause`). Das erste Update mit dieser Änderung musste per USB eingespielt werden. |
+| Startgrund nach Update „Watchdog“ statt „Software“ | Display-DMA lief beim Neustart weiter | Shutdown-Handler löscht das Panel vor dem Neustart |
+| Ecken der Glas-Karten in falscher Farbe (tagsüber sichtbar) | Eckzeilen behielten die Mittelfarbe | Eckzeilen bis an die Rundung zeilenweise färben |
+| Spaltenköpfe beim Pollenflug überlappten, Garten-Legende über den Balken | Layout | Breitere Spalten, Wochentag statt „übermorgen“, Legende über dem Diagramm |
+| `espota.py` meldet gelegentlich „Unexpected response from device“ | unklar, vermutlich ein verirrtes UDP-Paket | zweiter Versuch klappt |
+| **Flimmern im Hintergrund** (Nutzer, tagsüber) | Nicht das Dithering (abgeschaltet: blieb) und nicht die Animation (auch auf einer Seite ohne Animation). Ursache war die **Bildwiederholrate**: Mit der langen Austastlücke waren es bei 16 MHz nur 36 Bilder/s. Das Umpolen der Pixel durch das Panel wird auf dem mittelhellen blauen Taghimmel sichtbar, nachts auf Dunkelblau nicht. | Testbefehl `pclk` zum Umstellen im Betrieb. 20 MHz: weniger Flimmern; 22 MHz (50 Bilder/s): kaum noch sichtbar, Bild steht auch auf Übersicht und Radar sauber. Festgelegt auf 22 MHz. |
+
+### Getestet
+- Statusseite: alle sechs Quellen mit Zertifikatsprüfung erfolgreich, Log, Startgrund
+- Pollenflug (Region 112) mit Datumsversatz zur Ausgabe, Biowetter (Zone I), Gartenbilanz
+- Seiten Gesundheit, Himmel & Luft (Garten) und Draußen per Bildschirmfoto
+- Update über WLAN mit angehaltenen Abrufen, Einstellungen bleiben erhalten
+- 22 MHz: Bild steht auf Übersicht und Radar (Nutzer)
+- Noch nicht gesehen: Wischen während des Radar-Ladens am Gerät (die Ursache ist behoben, eine Rückmeldung fehlt noch), Hinweise zu Pollen, Biowetter und Gießen bei passender Lage, ein Neustart durch Watchdog oder Überwachung im echten Betrieb
+
 ## Offene Punkte und Ideen
+- Wischen während des Radar-Ladens am Gerät bestätigen
 - Einrichtung mit dem Handy über den Hotspot ausprobieren
 - Firmware-Upload über die Webseite ausprobieren
-- Radar, Regenhinweis, Regenanimation und Hinweise bei echtem Regen, Frost oder Gewitter prüfen
+- Radar, Regenhinweis, Regenanimation und Hinweise bei echtem Regen, Frost, Gewitter oder Pollenflug prüfen
 - Dämmerungsfarben am Gerät prüfen und bei Bedarf anpassen
 - Bewertung für „Draußen“ nach Erfahrung nachjustieren
+- Interner Speicher: mbedTLS könnte seine Puffer in den PSRAM legen (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`, erfordert einen Neubau der Bibliotheken)
 - Für den Dauerbetrieb ein USB-Netzteil statt des Mac-Ports verwenden
-- Zertifikate prüfen, statt `setInsecure()` zu verwenden
-- Weitere Ideen aus der Vorschlagsliste: Kocher-Pegel, Müllabfuhr und Kalender, DWD-Pollenflug, Gießhinweis, Wetterrückblick, PV-Prognose, Innenraumsensor, Smart Home
+- Weitere Ideen aus der Vorschlagsliste: Kocher-Pegel, Spritpreise, Müllabfuhr und Kalender, Wetterrückblick, mehrere Orte, Bilderrahmen, Innenraumsensor, Smart Home

@@ -1,5 +1,7 @@
 #include "net.h"
 
+#include "log.h"
+
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -12,7 +14,11 @@ class Request {
  public:
   explicit Request(const String& url) {
     https_ = url.startsWith("https");
-    if (https_) secure_.setInsecure();
+    if (https_) {
+      // Zertifikate gegen die Sammlung von ESP-IDF prüfen
+      secure_.useBuiltinCACertBundle();
+      secure_.setHandshakeTimeout(15);
+    }
     ok_ = http_.begin(https_ ? static_cast<WiFiClient&>(secure_) : plain_, url);
     // HTTP/1.0 verhindert Chunked-Encoding, damit der Datenstrom direkt lesbar ist
     http_.useHTTP10(true);
@@ -21,7 +27,7 @@ class Request {
     if (ok_) {
       int status = http_.GET();
       if (status != HTTP_CODE_OK) {
-        Serial.printf("HTTP %d bei %s\n", status, url.c_str());
+        logf("HTTP %d bei %.60s", status, url.c_str());
         ok_ = false;
       }
     }
@@ -41,16 +47,30 @@ class Request {
 
 }  // namespace
 
-bool httpGetJson(const String& url, JsonDocument& doc) {
-  Request req(url);
-  if (!req.ok()) return false;
-  DeserializationError err = deserializeJson(doc, req.http().getStream());
+namespace {
+
+// Erst vollständig in den PSRAM laden, dann auswerten: Direkt aus dem Datenstrom brach das Einlesen
+// großer Dateien (Biowetter, 109 KB) bei Übertragungspausen ab
+bool getJson(const String& url, JsonDocument& doc, const JsonDocument* filter) {
+  size_t len;
+  uint8_t* body = httpGetBytes(url, len, 512 * 1024);
+  if (!body) return false;
+  const char* text = reinterpret_cast<const char*>(body);
+  DeserializationError err = filter ? deserializeJson(doc, text, len, DeserializationOption::Filter(*filter))
+                                    : deserializeJson(doc, text, len);
+  free(body);
   if (err) {
-    Serial.printf("JSON-Fehler: %s bei %s\n", err.c_str(), url.c_str());
+    logf("JSON-Fehler: %s bei %.60s", err.c_str(), url.c_str());
     return false;
   }
   return true;
 }
+
+}  // namespace
+
+bool httpGetJson(const String& url, JsonDocument& doc) { return getJson(url, doc, nullptr); }
+
+bool httpGetJson(const String& url, JsonDocument& doc, const JsonDocument& filter) { return getJson(url, doc, &filter); }
 
 uint8_t* httpGetBytes(const String& url, size_t& len, size_t maxLen) {
   Request req(url);
@@ -83,6 +103,7 @@ uint8_t* httpGetBytes(const String& url, size_t& len, size_t maxLen) {
     len += stream->readBytes(buf + len, min((size_t)avail, capacity - len));
   }
   if (len == 0 || (size > 0 && len != (size_t)size)) {
+    logf("Unvollständig: %u von %d Bytes bei %.60s", len, size, url.c_str());
     free(buf);
     return nullptr;
   }

@@ -27,14 +27,15 @@ Sunton **ESP32-8048S043** (Platinenaufdruck „…F1 V1.2“, Variante mit kapaz
 
 | Parameter | Wert |
 |---|---|
-| Pixeltakt | 16 MHz, Daten auf fallender Flanke (`pclk_active_neg`) |
+| Pixeltakt | 22 MHz, Daten auf fallender Flanke (`pclk_active_neg`) |
 | HSYNC: Pulsbreite / Back Porch / Front Porch | 4 / 16 / 8 |
 | VSYNC: Pulsbreite / Back Porch / Front Porch | 4 / **23 / 22** |
 
-Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
+Ergibt 828 × 529 Takte je Bild, also etwa 50 Bilder pro Sekunde.
 
 - **Lange senkrechte Austastlücke:** Der Treiber startet die DMA in jedem VSYNC neu (`CONFIG_LCD_RGB_RESTART_IN_VSYNC`) und füllt dabei unter Umständen den ersten Bounce Buffer aus dem PSRAM. Mit 4 bzw. 12 Zeilen Back Porch reichte die Zeit unter Last nicht, das Bild war um einige Zeilen verschoben und flackerte am linken Rand. Siehe [entwicklung.md](entwicklung.md).
-- **Bei 12 MHz (etwa 29 Bilder/s) erkennt das Panel kein gültiges Signal** und zeigt seinen Selbsttest. Unter etwa 33 Bildern/s besser nicht gehen.
+- **Bildwiederholrate:** Bei 16 MHz (36 Bilder/s) flimmerten mittelhelle, gleichmäßige Flächen (der blaue Taghimmel) sichtbar. Das Panel polt die Pixel bei jedem Bild um, und bei niedriger Rate wird das sichtbar. 20 MHz waren besser, mit 22 MHz (50 Bilder/s) ist es kaum noch zu sehen. Mehr als etwa 22 MHz schafft der PSRAM laut Espressif nicht zuverlässig. Zum Ausprobieren gibt es den Testbefehl `pclk` (`esp_lcd_rgb_panel_set_pclk`, wirkt ab dem nächsten Bild).
+- **Bei 12 MHz (etwa 29 Bilder/s) erkennt das Panel kein gültiges Signal** und zeigt seinen Selbsttest.
 
 ## Software-Plattform
 
@@ -56,8 +57,12 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 
 | Datei | Aufgabe |
 |---|---|
-| `main.cpp` | Ablauf: WLAN oder Einrichtungs-Hotspot, Abrufplan, Gesten, Nachtmodus, Seitenwechsel, Neuzeichnen und Animation, Testbefehle |
-| `model.h` | Gemeinsamer Zustand: Daten, aktuelle Seite, Status |
+| `main.cpp` | Ablauf: WLAN oder Einrichtungs-Hotspot, Gesten, Nachtmodus, Seitenwechsel, Neuzeichnen und Animation, Watchdog und Überwachung, Testbefehle |
+| `model.h` | Gemeinsamer Zustand: Daten, aktuelle Seite, Status; Sperre `ModelLock` |
+| `fetch.*` | Hintergrund-Task für alle Abrufe, Abrufplan, Zustand der Datenquellen |
+| `log.*` | Meldungen an die serielle Schnittstelle und in einen Ringpuffer für die Statusseite |
+| `health.*` | DWD-Pollenflug und -Biowetter, Listen der Regionen und Zonen |
+| `garden.*` | Wasserbilanz (Regen und Verdunstung) von Open-Meteo |
 | `settings.*` | Einstellungen im NVS, Vorgaben beim ersten Start, Nachtzeitraum |
 | `web.*` | Webseite, Captive Portal, Firmware-Update im Browser, ArduinoOTA, mDNS |
 | `outdoor.*` | Bewertung der Stunden, bestes Zeitfenster, Hinweise |
@@ -65,7 +70,7 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 | `touch.*` | GT911 und Gestenerkennung |
 | `net.*` | HTTP(S)-Abrufe für JSON und Binärdaten (PSRAM) |
 | `weather.*` | Open-Meteo-Vorhersage, Regenhinweis |
-| `air.*` | Open-Meteo-Luftqualität und Pollen |
+| `air.*` | Open-Meteo-Luftqualität |
 | `warnings.*` | DWD-Warnungen (WFS) |
 | `radar.*` | DWD-Radarkarte und -bilder (WMS), Projektion, Städteliste |
 | `astro.*` | Mondphase |
@@ -73,11 +78,33 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 | `icons.*` | Wettersymbole, statisch und animiert |
 | `ui.*` | Seitensteuerung: Neuzeichnen, Animation, Antippen auswerten, Radaransicht |
 | `ui_common.*` | Schriften, Text mit Umbruch, Hintergrund mit Dithering, Glas-Karten, Kopfzeile, Temperaturkurve |
-| `ui_pages.*` | Übersicht, Draußen, 48 Stunden, Tagesansicht, Himmel & Luft, Warnungen, Nacht, Info |
+| `ui_pages.*` | Übersicht, Draußen, 48 Stunden, Tagesansicht, Himmel & Luft, Gesundheit, Warnungen, Nacht, Info |
+
+## Abrufe im Hintergrund (`src/fetch.cpp`)
+
+- Ein eigener FreeRTOS-Task („abrufe“, 16 KB Stack, Priorität 1) auf **Kern 0**, wo auch das WLAN läuft. Die Oberfläche (Arduino-`loop`) läuft auf Kern 1. Vorher liefen die Abrufe in der Hauptschleife, und während jedes Abrufs (0,5–1 s je Radarbild) wurden Gesten nicht ausgewertet.
+- Je Durchlauf höchstens ein Abruf, nach Wichtigkeit: Wetter, Warnungen, Pollenflug, Biowetter, Luft, Garten, sonst ein Radarteil (Karte vorab, Bilder nur auf der Radarseite). Ohne Arbeit 250 ms Pause.
+- Geladen wird in eigene Zwischenspeicher (PSRAM). Die Übernahme ins Modell geschieht unter `ModelLock`, einem rekursiven Mutex. Die Oberfläche hält dieselbe Sperre beim Zeichnen und Animieren. Danach meldet der Task über ein Flag „neue Daten“, die Oberfläche zeichnet neu.
+- Das Radar hat eine eigene Sperre: Karte und Bilder werden außerhalb geladen und dekodiert und nur zum Austauschen der Zeiger gesperrt. `radar::draw` sperrt während des Zeichnens.
+- Nach Wetter, Pollen, Biowetter oder Garten wird „Draußen“ neu ausgewertet.
+- `fetch::pause()` hält die Abrufe während eines Firmware-Updates an. Mit gleichzeitigem TLS-Abruf brachen Updates über WLAN mit „Receive Error“ ab.
+- `fetch::source(i)` liefert je Quelle letzten Versuch, letzten Erfolg und die Zahl der Fehler (Statusseite).
+
+## Überwachung und Robustheit
+
+- **Watchdog** (`esp_task_wdt`) für die Hauptschleife mit 60 s. Firmware-Uploads (Webseite, ArduinoOTA) setzen ihn bei jedem Datenblock zurück. Die Leerlaufprüfung der Kerne ist abgeschaltet, weil der Abruf-Task Kern 0 beim Dekodieren kurz voll auslasten kann.
+- **Abruf-Task:** Meldet er sich bei bestehender WLAN-Verbindung 5 Minuten nicht, startet das Board neu.
+- **Speicher:** Sinkt der freie interne Speicher unter 24 KB oder der größte freie Block unter 8 KB, startet das Board neu. Im Betrieb sind etwa 80–130 KB frei, der niedrigste Wert lag bei 53 KB, während ein TLS-Abruf lief.
+- **Neustart:** Ein Shutdown-Handler hält vorher die Display-DMA an (`esp_lcd_panel_del`). Ohne ihn erschien nach einem Update als Startgrund „Watchdog“ statt „Software“.
+- **TLS:** Zertifikate werden gegen die eingebaute Sammlung von ESP-IDF geprüft (`useBuiltinCACertBundle`, `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE`), Handshake-Timeout 15 s. Open-Meteo und DWD funktionieren damit.
+- **JSON** wird erst vollständig in den PSRAM geladen und dann ausgewertet (`httpGetBytes` + `deserializeJson`). Direkt aus dem Datenstrom brach das 109 KB große Biowetter mit `IncompleteInput` ab.
+- **Log** (`log.cpp`): `logf()` schreibt auf die serielle Schnittstelle und in einen Ringpuffer mit 64 Zeilen und Zeitstempel. Er ist aus jedem Task nutzbar (Mutex) und auf der Statusseite zu sehen.
+- **Statusseite** `/status`: Laufzeit, Startgrund (`esp_reset_reason`), Bauzeit der Firmware, interner Speicher (aktuell und niedrigster Wert), PSRAM, WLAN-Signal, Datenquellen, Log
 
 ## Einstellungen (`src/settings.cpp`)
 
-- Gespeichert als ein Block (`struct Settings`) im NVS unter dem Namensraum `wetter`, mit Versionsnummer. Passen Version oder Größe nicht, werden die Vorgaben neu angelegt. **Wird `Settings` geändert, `VERSION` erhöhen.**
+- Gespeichert als ein Block (`struct Settings`) im NVS unter dem Namensraum `wetter`, mit Versionsnummer. Beim Laden werden zuerst die Vorgaben gesetzt und dann die gespeicherten Bytes darübergelegt. **Neue Felder deshalb nur hinten anfügen**: Ältere, kürzere Daten werden so übernommen, und die neuen Felder behalten ihre Vorgabe. `VERSION` nur bei unverträglichen Änderungen erhöhen, denn dann gehen WLAN und PIN verloren.
+- DWD-Pollenregion (`pollenRegion`, Vorgabe 112) und Biowetter-Zone (`bioZone`, Vorgabe `I`) aus `config.h`
 - Vorgaben beim ersten Start: WLAN aus `include/secrets.h` (optional), Ort und Helligkeit aus `include/config.h`, Nachtmodus aus (22:30–6:30, gedimmte Uhr, Helligkeit 12), zufällige 8-stellige PIN (`esp_random`).
 - Ort: Name und Koordinaten. Sind die Koordinaten 0/0, wird der Name per Open-Meteo-Geocoding gesucht. Ohne Namen wird der Ort über die IP-Adresse bestimmt.
 
@@ -106,7 +133,7 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 
 - Bewertung je Stunde, 0 bis 100: Basis 100, minus 0,8 × Regenwahrscheinlichkeit, −50 bei Regen ab 0,1 mm, Kälte −2,5 je Grad unter 15° (höchstens −35), Hitze −5 je Grad über 26° (höchstens −50), Wind −1,5 je km/h über 20, −20 bei Böen über 45 km/h, Gewitter −80, Schnee −30, Nebel −15, bedeckt −8, Sonne (Code 0/1) +5. Nachtstunden ergeben 0.
 - Zeitfenster: Schwelle = max(50, Tagesbestwert − 12). Gewählt wird der zusammenhängende Lauf über der Schwelle mit der größten Summe (Wert − Schwelle + 10). Tag: heute, wenn noch mindestens 2 Stunden Tageslicht bleiben, sonst morgen.
-- Hinweise: siehe [fachlich.md](fachlich.md), ausgewertet werden die nächsten 24 Stunden ab der aktuellen Stunde. Ausgewertet wird nach jedem Wetterabruf.
+- Hinweise: siehe [fachlich.md](fachlich.md). Ausgewertet werden die nächsten 24 Stunden ab der aktuellen Stunde, dazu Pollenflug und Biowetter (heute) und die Gartenbilanz. Neu ausgewertet wird nach jedem Abruf dieser Quellen.
 - Wechselnde Zeile der Übersicht (`ui.cpp`): Regenhinweis, beste Zeit und Hinweise ab Wichtigkeit 5, Wechsel alle 6 s. Weil die Animation zwischen zwei Bildspeichern umschaltet, wird ein neuer Eintrag in **beide** Speicher gezeichnet (`tickerPending = 2`), sonst flackert die Zeile zwischen altem und neuem Text. Der Hintergrund der Zeile wird wie beim Wettersymbol gesichert und wiederhergestellt.
 
 ## Display-Ansteuerung (`src/lcd.cpp`)
@@ -174,7 +201,7 @@ Feste Farbpaare (oben/unten) für Nacht klar/bewölkt, Dämmerung, Tag klar/bew�
 - `timezone=auto`: Ortszeit, `utc_offset_seconds` für NTP
 
 ### Open-Meteo Luftqualität (`air.cpp`)
-`https://air-quality-api.open-meteo.com/v1/air-quality`: `current` mit european_aqi, pm2_5, pm10, ozone, nitrogen_dioxide; `hourly` mit den Pollenarten für heute. Antwort etwa 3 KB.
+`https://air-quality-api.open-meteo.com/v1/air-quality`: `current` mit european_aqi, pm2_5, pm10, ozone, nitrogen_dioxide. Die Pollenwerte von Open-Meteo werden nicht mehr verwendet, an ihre Stelle trat der DWD-Pollenflug.
 
 ### DWD Warnungen (`warnings.cpp`)
 WFS `https://maps.dwd.de/geoserver/dwd/ows`, Ebene `dwd:Warnungen_Gemeinden`, gefiltert auf dem Server mit `CQL_FILTER=INTERSECTS(THE_GEOM,POINT(lon lat))` (WFS 1.0.0: Länge zuerst). Mit `propertyName` werden nur die benötigten Felder geholt, ohne Geometrie. Antwort unter 1 KB je Warnung. `SEVERITY` Minor/Moderate/Severe/Extreme ergibt die Stufen 1–4. Zeiten in UTC werden mit dem Versatz von Open-Meteo in Ortszeit umgerechnet.
@@ -187,23 +214,34 @@ WMS `https://maps.dwd.de/geoserver/dwd/wms`, Version 1.1.1, `srs=EPSG:4326`. Aus
 - Städte: feste Liste (Region Hohenlohe und deutsche Großstädte), nach Wichtigkeit, nur ohne Überlappung beschriftet.
 - Die Daten stammen vom Deutschen Wetterdienst, die Quelle wird auf der Karte genannt. Die Reliefkarte stammt von Natural Earth (gemeinfrei).
 
+### DWD Pollenflug und Biowetter (`health.cpp`)
+Open Data unter `https://opendata.dwd.de/climate_environment/health/alerts/`:
+- `s31fg.json` (etwa 16 KB): je Region/Teilregion (`partregion_id`, sonst `region_id`) für 8 Pollenarten die Werte `today`, `tomorrow`, `dayafter_to` als Text („0“, „0-1“, … „3“, „-1“ = keine Angabe). **„today“ bezieht sich auf den Ausgabetag** (`last_update`, täglich gegen 11 Uhr). Der Versatz zu heute wird über das Datum berechnet.
+- `biowetter.json` (etwa 109 KB): 11 Zonen A–K, je bis zu 6 Halbtage (`today_morning` … `dayafter_to_afternoon`) mit Datum, `effect[]` (Name und Wert als Text) und Empfehlungen. Eingelesen wird mit einem ArduinoJson-Filter nur id, Datum, Name, Effekte und Empfehlungen. Die Effekte werden über Teile des Namens zugeordnet, die Werte über Stichworte („geringe“, „hohe“, „Kälte“ …).
+- Die Listen der Regionen und Zonen sind fest in `health.cpp` hinterlegt und werden auf der Webseite zur Auswahl angeboten.
+
+### Open-Meteo Garten (`garden.cpp`)
+`daily=precipitation_sum,et0_fao_evapotranspiration&past_days=7&forecast_days=3`: Bilanz über die 7 vergangenen Tage, dazu der erwartete Regen von heute und morgen. Eine eigene kleine Anfrage, weil `past_days=7` in der Hauptabfrage die Stundenwerte stark vergrößert hätte.
+
 ### ip-api.com (Standort)
 Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,lat,lon&lang=de`
 
 ### Hinweise zu den Abrufen (`net.cpp`)
-- HTTPS ohne Zertifikatsprüfung (`setInsecure`), `useHTTP10(true)` gegen Chunked-Encoding
+- HTTPS mit Zertifikatsprüfung (siehe oben), `useHTTP10(true)` gegen Chunked-Encoding
 - Binärdaten (PNG) landen in einem PSRAM-Puffer, der bei Bedarf wächst.
 - Die Meldungen `ssl_client … (-76)` im Log sind harmlos: Der Server schließt die Verbindung nach der Antwort.
-- Höchstens ein Abruf je Durchlauf der Hauptschleife, damit Touch und Animation nicht lange warten.
+- Die Abrufe laufen im Hintergrund-Task, siehe oben.
 
 ## Ablauf (`src/main.cpp`)
 
-1. `setup`: Display, Hintergrundbeleuchtung, Touch, WLAN verbinden (höchstens 20 s)
-2. `loop`:
-   - Testbefehle von der seriellen Schnittstelle
+1. `setup`: Einstellungen, Display, Touch, Watchdog, WLAN; dann Webseite und Abruf-Task bzw. Einrichtungs-Hotspot
+2. `loop` (Kern 1):
+   - Watchdog zurücksetzen, Webseite und ArduinoOTA bedienen, Testbefehle
+   - Überwachung (alle 10 s): Abruf-Task und Speicher
+   - neue Daten vom Abruf-Task: neu zeichnen, Helligkeit anpassen
    - Geste auswerten (Seitenwechsel, Antippen-Ziele über `ui::hit`)
-   - ein fälliger Abruf: Wetter, sonst Warnungen, sonst Luft, sonst ein Radarteil
-   - bei Minutenwechsel, neuen Daten oder Seitenwechsel komplett neu zeichnen (`ui::render`), sonst alle 80 ms ein Animationsbild (`ui::animate`)
+   - Nachtmodus
+   - bei Minutenwechsel, neuen Daten oder Seitenwechsel komplett neu zeichnen (`ui::render`), sonst alle 80 ms ein Animationsbild (`ui::animate`), jeweils unter `ModelLock`
    - nach 3 Minuten ohne Berührung zurück zur Übersicht
 
 ## Testbefehle und Bildschirmfotos
@@ -212,9 +250,11 @@ Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,l
 
 | Befehl | Wirkung |
 |---|---|
-| `seite N` | Seite N: 0 Übersicht, 1 Draußen, 2 Radar, 3 48 Stunden, 4 Himmel & Luft, 5 Tag, 6 Warnungen, 7 Nacht, 8 Info |
+| `seite N` | Seite N: 0 Übersicht, 1 Draußen, 2 Radar, 3 48 Stunden, 4 Himmel & Luft, 5 Gesundheit, 6 Tag, 7 Warnungen, 8 Nacht, 9 Info |
 | `tipp X Y` | Antippen simulieren |
 | `wisch l` / `wisch r` | Wischen nach links bzw. rechts |
+| `pclk MHZ` | Pixeltakt im Betrieb ändern (14–30), zum Vergleich der Bildwiederholrate |
+| `dither 0` / `dither 1` | Dithering des Hintergrunds aus- bzw. einschalten |
 | `pin` | PIN ausgeben, z. B. für Tests der Webseite mit curl |
 | `einrichtung` | Einrichtungs-Hotspot starten, die Einstellungen bleiben erhalten |
 | `warnung B L` | Warnungen für Breite B und Länge L laden, z. B. für einen Ort mit aktueller Warnung |
@@ -224,13 +264,13 @@ Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,l
 
 ## Ressourcen
 
-- RAM (statisch): ca. 71 KB von 320 KB; zur Laufzeit etwa 220 KB interner Speicher frei
-- Flash: ca. 1,71 MB von 6,25 MB (App-Partition), davon etwa 345 KB Schriften
+- RAM (statisch): ca. 87 KB von 320 KB; nach dem Start etwa 200 KB interner Speicher frei, im Betrieb 80–130 KB (TLS, Webserver, Abruf-Task)
+- Flash: ca. 1,8 MB von 6,25 MB (App-Partition), davon etwa 345 KB Schriften
 - PSRAM: 2 × 768 KB Bildspeicher, 637 KB Radarkarte, 73 KB Symbol-Hintergrund, Radar-PNGs (etwa 200 KB), TLS- und JSON-Puffer
 
 ## Upload
 
-- **Über WLAN** (bevorzugt): Webseite `/update` oder `espota.py`, siehe oben
+- **Über WLAN** (bevorzugt): Webseite `/update` oder `espota.py`, siehe oben. `espota.py` meldet gelegentlich „Unexpected response from device“; ein zweiter Versuch klappt dann.
 - Über USB: `upload_speed = 460800`. Bei 921600 bricht esptool mit „Unable to verify flash chip connection“ ab.
 - USB-Seriell über CH340, am Mac `/dev/cu.usbserial-*`
 - **USB-Stabilität:** Der CH340 hat sich mehrmals kurz abgemeldet („Device not configured“), jeweils beim Verbindungsaufbau des WLANs oder beim Start des Hotspots, also bei hohem Sendestrom. Vermutlich sind das Spannungseinbrüche über Kabel und Adapter. Danach hing der Treiber am Mac (esptool und pyserial blockierten), bis das Kabel neu eingesteckt wurde. Einmal blieb das Board nach einem abgebrochenen USB-Upload im Bootloader.

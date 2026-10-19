@@ -9,9 +9,16 @@
 
 // Abstand zwischen zwei Wetterabrufen
 #define WEATHER_INTERVAL_MS (10UL * 60UL * 1000UL)
+// DWD-Regionen für Pollenflug und Biowetter (Liste in src/health.cpp), Vorgabe für den ersten Start
+#define POLLEN_REGION 112  // Hohenlohe/mittlerer Neckar/Oberschwaben
+#define BIO_ZONE 'I'       // Württemberg, Franken
+
 // Abstand der Abrufe von Unwetterwarnungen (DWD) und Luftqualität/Pollen
 #define WARNINGS_INTERVAL_MS (5UL * 60UL * 1000UL)
 #define AIR_INTERVAL_MS (30UL * 60UL * 1000UL)
+// Pollenflug und Biowetter erscheinen einmal täglich gegen 11 Uhr, die Gartenbilanz ändert sich langsam
+#define HEALTH_INTERVAL_MS (60UL * 60UL * 1000UL)
+#define GARDEN_INTERVAL_MS (3UL * 60UL * 60UL * 1000UL)
 // Wartezeit bis zum nächsten Versuch, wenn ein Abruf fehlschlägt
 #define WEATHER_RETRY_MS (60UL * 1000UL)
 

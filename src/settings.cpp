@@ -1,5 +1,7 @@
 #include "settings.h"
 
+#include "log.h"
+
 #include <Preferences.h>
 #include <esp_random.h>
 
@@ -34,6 +36,8 @@ void defaults(Settings& s) {
   s.nightEnd = 6 * 60 + 30;
   s.nightOff = false;
   s.brightClock = 12;
+  s.pollenRegion = POLLEN_REGION;
+  s.bioZone = BIO_ZONE;
   snprintf(s.pin, sizeof(s.pin), "%08lu", (unsigned long)(esp_random() % 100000000UL));
 }
 
@@ -42,14 +46,23 @@ void defaults(Settings& s) {
 void loadSettings() {
   Preferences prefs;
   prefs.begin(NAMESPACE, true);
-  bool stored = prefs.getUChar("version", 0) == VERSION && prefs.getBytesLength("data") == sizeof(Settings);
-  if (stored) prefs.getBytes("data", &settings, sizeof(Settings));
+  size_t len = prefs.getBytesLength("data");
+  bool stored = prefs.getUChar("version", 0) == VERSION && len > 0 && len <= sizeof(Settings);
+  // Vorgaben zuerst, dann die gespeicherten Bytes darüber: Felder, die eine ältere Firmware noch
+  // nicht kannte (hinten angefügt), behalten so ihre Vorgabe
+  Settings fresh;
+  defaults(fresh);
+  settings = fresh;
+  if (stored) {
+    prefs.getBytes("data", &settings, len);
+    if (!settings.pin[0]) stored = false;  // unbrauchbar
+  }
   prefs.end();
   if (!stored) {
-    defaults(settings);
-    saveSettings();
-    Serial.println("Einstellungen neu angelegt");
+    settings = fresh;
+    logf("Einstellungen neu angelegt");
   }
+  if (!stored || len < sizeof(Settings)) saveSettings();
 }
 
 void saveSettings() {

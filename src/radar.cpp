@@ -1,6 +1,9 @@
 #include "radar.h"
 
+#include "log.h"
+
 #include <esp_heap_caps.h>
+#include <freertos/semphr.h>
 #include <math.h>
 
 #include "lcd.h"
@@ -45,6 +48,16 @@ const City CITIES[] = {
     {"Chemnitz", 50.8278f, 12.9214f},
 };
 
+// Der Hintergrund-Task lädt, die Oberfläche zeichnet; getauscht wird nur unter dieser Sperre
+SemaphoreHandle_t mutex() {
+  static SemaphoreHandle_t m = xSemaphoreCreateMutex();
+  return m;
+}
+struct Guard {
+  Guard() { xSemaphoreTake(mutex(), portMAX_DELAY); }
+  ~Guard() { xSemaphoreGive(mutex()); }
+};
+
 float minLon, minLat, maxLon, maxLat;
 char bbox[64];
 
@@ -83,23 +96,31 @@ bool loadMap() {
   size_t len;
   uint8_t* png = httpGetBytes(url, len, 600 * 1024);
   if (!png) return false;
-  if (!mapPixels) mapPixels = (uint16_t*)heap_caps_malloc(WIDTH * HEIGHT * 2, MALLOC_CAP_SPIRAM);
+  auto* pixels = (uint16_t*)heap_caps_malloc(WIDTH * HEIGHT * 2, MALLOC_CAP_SPIRAM);
   bool ok = false;
-  if (mapPixels) {
+  if (pixels) {
     LGFX_Sprite sprite;
-    sprite.setBuffer(mapPixels, WIDTH, HEIGHT, 16);
+    sprite.setBuffer(pixels, WIDTH, HEIGHT, 16);
     sprite.fillScreen(0);
     ok = sprite.drawPng(png, len, 0, 0);
-    darken(mapPixels, WIDTH * HEIGHT);
+    darken(pixels, WIDTH * HEIGHT);
   }
   free(png);
-  Serial.printf("Radarkarte %s\n", ok ? "geladen" : "fehlerhaft");
+  if (ok) {
+    Guard g;
+    free(mapPixels);
+    mapPixels = pixels;
+  } else {
+    free(pixels);
+  }
+  logf("Radarkarte %s", ok ? "geladen" : "fehlerhaft");
   return ok;
 }
 
 // Legt die Zeitpunkte fest: letzte sichere Messung (jetzt minus 10 Minuten, auf 5 Minuten
 // abgerundet) und davon ausgehend alle 10 Minuten
 void planFrames(time_t now) {
+  Guard g;
   time_t latest = (now - 10 * 60) / 300 * 300;
   for (int i = 0; i < FRAMES; i++) {
     free(frames[i].png);
@@ -115,8 +136,14 @@ bool loadFrame(Frame& f) {
   formatTime(f.time, time, sizeof(time));
   String url = String(WMS) + "&bbox=" + bbox + "&width=" + WIDTH + "&height=" + HEIGHT +
                "&layers=dwd:Niederschlagsradar&styles=&format=image/png&transparent=true&time=" + time;
-  f.png = httpGetBytes(url, f.len, 400 * 1024);
-  return f.png != nullptr;
+  size_t len;
+  uint8_t* png = httpGetBytes(url, len, 400 * 1024);
+  if (!png) return false;
+  Guard g;
+  free(f.png);
+  f.png = png;
+  f.len = len;
+  return true;
 }
 
 bool timeKnown() { return time(nullptr) > 1700000000; }
@@ -124,6 +151,7 @@ bool timeKnown() { return time(nullptr) > 1700000000; }
 }  // namespace
 
 void begin(const Location& loc) {
+  Guard g;
   free(mapPixels);
   mapPixels = nullptr;
   for (auto& f : frames) {
@@ -176,6 +204,7 @@ bool hasFrame(int i) { return frames[i].png != nullptr; }
 time_t frameTime(int i) { return frames[i].time; }
 
 void draw(LGFX_Sprite& canvas, int y, int frame) {
+  Guard g;
   if (mapPixels) {
     lcd::restoreRect(mapPixels, 0, y, WIDTH, HEIGHT);
   } else {

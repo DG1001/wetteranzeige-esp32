@@ -2,13 +2,13 @@
 
 ## Zweck
 
-Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen Blick zeigt sie, wie das Wetter jetzt ist und wie es wird. Per Wischen und Antippen gibt es Details: die beste Zeit für draußen mit Hinweisen, Regenradar, Stundenverlauf, Tagesansichten, Sonne und Mond, Luftqualität und Pollen sowie amtliche Unwetterwarnungen. Nachts kann sie auf eine gedimmte Uhr umschalten oder ganz dunkel werden. Eingerichtet und aktualisiert wird sie über das WLAN.
+Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen Blick zeigt sie, wie das Wetter jetzt ist und wie es wird. Per Wischen und Antippen gibt es Details: die beste Zeit für draußen mit Hinweisen, Regenradar, Stundenverlauf, Tagesansichten, Sonne und Mond, Luftqualität, Wasserbilanz für den Garten, Pollenflug und Biowetter sowie amtliche Unwetterwarnungen. Nachts kann sie auf eine gedimmte Uhr umschalten oder ganz dunkel werden. Eingerichtet und aktualisiert wird sie über das WLAN.
 
 ## Bedienung
 
 | Geste | Wirkung |
 |---|---|
-| Nach links / rechts wischen | Nächste / vorige Seite: Übersicht → Draußen → Radar → 48 Stunden → Himmel & Luft |
+| Nach links / rechts wischen | Nächste / vorige Seite: Übersicht → Draußen → Radar → 48 Stunden → Himmel & Luft → Gesundheit |
 | Tageskachel antippen (Übersicht) | Tagesansicht dieses Tages |
 | In der Tagesansicht wischen | Nächster / voriger Tag |
 | Stundenkarte antippen (Übersicht) | Seite „48 Stunden“ |
@@ -19,7 +19,7 @@ Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen B
 | 2 Sekunden gedrückt halten | Infoseite: Adresse der Webseite, PIN, QR-Code |
 | Nachts antippen | Display für 1 Minute wecken |
 
-Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Punkte unter der Kopfzeile zeigen, auf welcher der fünf Wischseiten man ist.
+Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Punkte unter der Kopfzeile zeigen, auf welcher der sechs Wischseiten man ist. Gewischt werden kann jederzeit, auch während Daten oder Radarbilder geladen werden.
 
 ## Kopfzeile (auf allen Seiten)
 
@@ -70,6 +70,9 @@ Genannt wird der zusammenhängende Zeitraum mit den besten Stunden des Tages: mi
 | UV-Index bis …: Sonnenschutz | UV-Maximum ab 6 | 5 |
 | Windig, Böen bis … km/h | Böen 50 bis 65 km/h | 4 |
 | Nebel um … | Nebel in den nächsten 12 Stunden | 4 |
+| Pollenflug heute: … hoch / mittel bis hoch / mittel | DWD-Pollenflug heute ab Stufe 2 (stärkste Art) | 6 bzw. 5 |
+| Biowetter: hohe Belastung (…) | DWD-Biowetter heute „hohe Gefährdung“ | 4 |
+| Gießen: in 7 Tagen … mm zu wenig Regen | Wasserbilanz ≤ −10 mm und heute und morgen zusammen unter 5 mm Regen erwartet | 4 |
 | Gutes Wetter zum Wäschetrocknen | mindestens 5 Stunden trocken, ab 8°, Luftfeuchte unter 75 % oder Wind ab 10 km/h | 3 |
 
 ### Regenradar
@@ -98,13 +101,15 @@ Stündlicher Verlauf ab jetzt:
   - 0–2 niedrig, 3–5 mäßig, 6–7 hoch, 8–10 sehr hoch, ab 11 extrem
 - **Luftqualität:** Europäischer Luftqualitätsindex mit Einstufung, dazu Feinstaub PM2,5 und PM10, Ozon und Stickstoffdioxid in µg/m³
   - 0–20 gut, 20–40 akzeptabel, 40–60 mäßig, 60–80 schlecht, 80–100 sehr schlecht, darüber extrem schlecht
-- **Pollen heute:** Erle, Birke, Gräser, Beifuß, Ambrosia mit „keine / gering / mittel / hoch“. Grundlage ist der Höchstwert der restlichen Stunden des Tages. Die Schwellen sind grob gewählt, in Körnern pro m³:
+- **Garten:** Wasserbilanz der letzten 7 Tage, also Regen minus Verdunstung (FAO-Referenzverdunstung von Open-Meteo), mit Balken je Tag (Regen blau nach oben, Verdunstung orange nach unten). Bewertung:
+  - über 0 mm: „ausreichend Regen“
+  - −10 bis 0 mm: „etwas trocken“
+  - ab −10 mm: „trocken: gießen“ (orange), bzw. „trocken, aber Regen erwartet“, wenn heute und morgen zusammen mindestens 5 mm Regen kommen sollen
 
-  | Pollen | gering ab | mittel ab | hoch ab |
-  |---|---|---|---|
-  | Erle, Birke, Gräser | 1 | 10 | 50 |
-  | Beifuß | 1 | 10 | 30 |
-  | Ambrosia | 1 | 5 | 15 |
+### Gesundheit
+Beides vom Deutschen Wetterdienst (Medizin-Meteorologie), Region bzw. Zone auf der Webseite einstellbar (für Künzelsau: Pollenregion „Hohenlohe/mittlerer Neckar/Oberschwaben“, Biowetter-Zone „Württemberg, Franken“).
+- **Pollenflug:** Hasel, Erle, Esche, Birke, Gräser, Roggen, Beifuß, Ambrosia für heute, morgen und übermorgen, als farbige Felder mit der Stufe des DWD (0, 0–1, 1, 1–2, 2, 2–3, 3; 0 = keine, 1 = gering, 2 = mittel, 3 = hoch). Der DWD gibt die Vorhersage einmal täglich gegen 11 Uhr aus. Vor der neuen Ausgabe fehlt deshalb meist der dritte Tag („–“).
+- **Biowetter:** Einfluss des Wetters auf Allgemeinbefinden, niedrigen Blutdruck, Herz und Bluthochdruck, entzündliches und degeneratives Rheuma, Asthma sowie Wärme- bzw. Kältebelastung. Für heute gilt die aktuelle Tageshälfte, für morgen die ungünstigere der beiden. Stufen: – kein Einfluss, günstig (grün), gering (gelb), mittel (orange), hoch (rot); bei Wärme/Kälte steht die Art im Feld, die Farbe zeigt die Stärke. Darunter die Empfehlung des DWD für heute.
 
 ### Warnungen
 Alle aktuellen amtlichen Warnungen und Vorabinformationen des DWD für die Gemeinde am Standort, nach Stufe sortiert. Jede Warnung zeigt Überschrift, Zeitraum, Beschreibung und Handlungsempfehlung. Lange Texte werden mit „…“ gekürzt.
@@ -123,8 +128,10 @@ Adresse der Webseite (`http://wetteranzeige.local` und die IP-Adresse), Benutzer
   - Helligkeit tagsüber und nachts
   - Nachtmodus: ein/aus, Beginn, Ende, gedimmte Uhr oder Display aus, Helligkeit der Uhr
   - WLAN ändern (danach Neustart)
+  - Region für Pollenflug, Zone für Biowetter
   - neue PIN (8 Ziffern)
   - Bildschirmfoto
+  - Statusseite: Laufzeit, Grund des letzten Starts, Speicher, WLAN-Signal, Zustand jeder Datenquelle, Log der letzten 64 Meldungen
   - Firmware-Update (Datei hochladen)
 - Die **PIN** wird beim ersten Start zufällig erzeugt. Sie steht nur am Gerät (Infoseite, Einrichtungsbildschirm).
 
@@ -143,7 +150,9 @@ Die Helligkeit der Beleuchtung ist tagsüber 220 und nachts 60. Beides lässt si
 |---|---|---|
 | Wetter | 10 min | 1 min |
 | Unwetterwarnungen | 5 min | 1 min |
-| Luftqualität und Pollen | 30 min | 1 min |
+| Luftqualität | 30 min | 1 min |
+| Pollenflug und Biowetter (DWD) | 1 h | 1 min |
+| Wasserbilanz Garten | 3 h | 1 min |
 | Radarbilder | beim Öffnen der Radarseite, wenn älter als 10 min | nächster Durchlauf |
 | Radarkarte | einmal nach dem Start | nächster Durchlauf |
 | Uhr, Hintergrund, Nachtmodus | jede Minute | – |
@@ -178,3 +187,4 @@ Beschreibung und Symbol ergeben sich aus dem WMO-Wettercode von Open-Meteo.
 - Texte nur auf Deutsch. Die Schriften enthalten ASCII, Latin-1 und typografische Zeichen wie „“ – … €.
 - Radaranimation und Regenhinweis bei tatsächlichem Regen sind bisher nicht am Gerät beobachtet worden, weil es während der Entwicklung trocken war. Dasselbe gilt für die meisten Hinweise auf der Seite „Draußen“; bisher kam nur der Wäschehinweis vor.
 - Die Bewertung für „Draußen“ und die Schwellen der Hinweise sind eigene Annahmen, keine offizielle Größe.
+- Pollenflug und Biowetter gibt es nur für Deutschland.

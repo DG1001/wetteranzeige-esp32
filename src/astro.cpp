@@ -33,3 +33,19 @@ MoonPhase moonPhase(time_t utc) {
   m.nextNew = utc + (time_t)((SYNODIC_MONTH - m.age) * 86400);
   return m;
 }
+
+long daysFromCivil(int y, int m, int d) {
+  y -= m <= 2;
+  long era = (y >= 0 ? y : y - 399) / 400;
+  long yoe = y - era * 400;
+  long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + doe - 719468;
+}
+
+long localDayNumber() {
+  time_t now = time(nullptr);
+  struct tm tm;
+  localtime_r(&now, &tm);
+  return daysFromCivil(tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+}

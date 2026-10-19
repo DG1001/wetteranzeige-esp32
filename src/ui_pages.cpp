@@ -347,22 +347,122 @@ void skyAir(const Model& m, const Theme& t) {
     snprintf(buf, sizeof(buf), "PM2,5 %.0f · PM10 %.0f · O3 %.0f · NO2 %.0f", air.pm25, air.pm10, air.ozone, air.no2);
     text(buf, 426, 260, FONT_SMALL, t.dim);
 
-    text("Pollen heute", 426, 296, FONT_TITLE, t.text);
-    static const char* const LEVELS[] = {"keine", "gering", "mittel", "hoch"};
-    static const uint32_t LEVEL_COLORS[] = {0x4CAF50u, 0xFDD835u, 0xFB8C00u, 0xE53935u};
-    for (int p = 0; p < Air::POLLEN; p++) {
-      int py = 336 + p * 27;
-      int level = pollenLevel(p, air.pollenToday[p]);
-      text(POLLEN_NAMES[p], 426, py, FONT_SMALL, t.text, middle_left);
-      for (int s = 0; s < 3; s++) {
-        uint32_t c = s < level ? LEVEL_COLORS[level] : mixColor(skyAt(t, py), t.dim, 0.25f);
-        canvas.fillSmoothRoundRect(552 + s * 40, py - 5, 34, 10, 4, c);
-      }
-      text(LEVELS[level], 766, py, FONT_SMALL, level ? t.text : t.dim, middle_right);
-    }
   } else {
     text("Keine Daten", 426, 238, FONT_SMALL, t.dim, middle_left);
   }
+
+  // Garten: Regen gegen Verdunstung der letzten 7 Tage
+  text("Garten", 426, 296, FONT_TITLE, t.text);
+  const Garden& g = m.garden;
+  if (g.valid) {
+    char mm[16];
+    formatDecimal(mm, sizeof(mm), g.balance, 0);
+    if (g.balance > 0) snprintf(mm, sizeof(mm), "+%d", (int)lroundf(g.balance));
+    snprintf(buf, sizeof(buf), "%s mm", mm);
+    bool dry = g.balance <= -10;
+    text(buf, 766, 294, FONT_TITLE, dry ? WARN : t.text, top_right);
+    const char* verdict = dry ? (g.rainSoon >= 5 ? "trocken, aber Regen erwartet" : "trocken: gießen")
+                              : g.balance < 0 ? "etwas trocken" : "ausreichend Regen";
+    text(verdict, 426, 322, FONT_SMALL, dry && g.rainSoon < 5 ? WARN : t.dim);
+    canvas.fillRect(428, 352, 10, 10, RAIN);
+    text("Regen", 444, 348, FONT_SMALL, t.dim);
+    canvas.fillRect(522, 352, 10, 10, 0xFB8C00u);
+    text("Verdunstung", 538, 348, FONT_SMALL, t.dim);
+    // Balken je Tag: Regen nach oben (blau), Verdunstung nach unten (orange)
+    const int baseY = 412, scale = 4, cw = 340 / Garden::PAST;
+    canvas.drawFastHLine(426, baseY, 340, mixColor(skyAt(t, baseY), t.dim, 0.4f));
+    for (int i = 0; i < Garden::PAST; i++) {
+      int cx = 426 + i * cw + cw / 2;
+      int up = min(36, (int)lroundf(g.rain[i] * scale)), down = min(18, (int)lroundf(g.et0[i] * scale));
+      if (up > 0) canvas.fillRect(cx - 9, baseY - up, 8, up, RAIN);
+      if (down > 0) canvas.fillRect(cx + 1, baseY + 1, 8, down, 0xFB8C00u);
+      text(WEEKDAYS_SHORT[g.weekday[i]], cx, 448, FONT_SMALL, t.dim, middle_center);
+    }
+  } else {
+    text("Keine Daten", 426, 330, FONT_SMALL, t.dim);
+  }
+}
+
+// ---------------------------------------------------------------- Gesundheit
+
+namespace {
+
+void fitText(char* buf, int maxW, const uint8_t* f) {
+  if (textWidth(buf, f) <= maxW) return;
+  size_t len = strlen(buf);
+  do {
+    do {
+      len--;
+    } while (len > 0 && (buf[len] & 0xC0) == 0x80);
+    strcpy(buf + len, "…");
+  } while (len > 0 && textWidth(buf, f) > maxW);
+}
+
+void chip(int cx, int cy, int w, uint32_t bg, const char* label, uint32_t fg) {
+  canvas.fillSmoothRoundRect(cx - w / 2, cy - 12, w, 24, 7, bg);
+  text(label, cx, cy + 1, FONT_SMALL, fg, middle_center);
+}
+
+}  // namespace
+
+void health(const Model& m, const Theme& t) {
+  const Health& h = m.health;
+  char buf[96];
+  const uint32_t none = mixColor(skyAt(t, 280), t.dim, 0.25f);
+
+  // Pollenflug
+  glass(t, 16, 88, 376, 384);
+  text("Pollenflug", 34, 102, FONT_TITLE, t.text);
+  strlcpy(buf, pollenRegionName(settings.pollenRegion), sizeof(buf));
+  char* colon = strchr(buf, ':');
+  fitText(colon ? colon + 2 : buf, 340, FONT_SMALL);
+  text(colon ? colon + 2 : buf, 34, 130, FONT_SMALL, t.dim);
+  const int col[] = {198, 270, 342};
+  struct tm now;
+  const char* third = localNow(now) ? WEEKDAYS_SHORT[(now.tm_wday + 2) % 7] : "+2";
+  const char* const days[] = {"heute", "morgen", third};
+  for (int d = 0; d < 3; d++) text(days[d], col[d], 166, FONT_SMALL, t.dim, middle_center);
+  static const uint32_t POLLEN_COLORS[] = {0, 0x7CB342u, 0xC0CA33u, 0xFDD835u, 0xFB8C00u, 0xF4511Eu, 0xE53935u};
+  static const char* const POLLEN_LABELS[] = {"0", "0–1", "1", "1–2", "2", "2–3", "3"};
+  for (int p = 0; p < Health::POLLEN; p++) {
+    int y = 196 + p * 29;
+    text(POLLEN_NAMES[p], 34, y, FONT_SMALL, t.text, middle_left);
+    for (int d = 0; d < 3; d++) {
+      int8_t v = h.pollenValid ? h.pollen[p][d] : -1;
+      if (v < 0) {
+        text("–", col[d], y, FONT_SMALL, t.dim, middle_center);
+      } else {
+        chip(col[d], y, 54, v == 0 ? none : POLLEN_COLORS[v], POLLEN_LABELS[v], v == 2 || v == 3 ? 0x202020u : 0xFFFFFFu);
+      }
+    }
+  }
+  text("0 keine · 1 gering · 2 mittel · 3 hoch", 34, 438, FONT_SMALL, t.dim);
+
+  // Biowetter
+  glass(t, 408, 88, 376, 384);
+  text("Biowetter", 426, 102, FONT_TITLE, t.text);
+  strlcpy(buf, bioZoneName(settings.bioZone), sizeof(buf));
+  fitText(buf, 340, FONT_SMALL);
+  text(buf, 426, 130, FONT_SMALL, t.dim);
+  const int bcol[] = {664, 734};
+  text("heute", bcol[0], 166, FONT_SMALL, t.dim, middle_center);
+  text("morgen", bcol[1], 166, FONT_SMALL, t.dim, middle_center);
+  static const uint32_t BIO_COLORS[] = {0, 0x43A047u, 0xFDD835u, 0xFB8C00u, 0xE53935u};
+  for (int e = 0; e < Health::EFFECTS; e++) {
+    int y = 196 + e * 29;
+    strlcpy(buf, BIO_NAMES[e], sizeof(buf));
+    fitText(buf, 196, FONT_SMALL);
+    text(buf, 426, y, FONT_SMALL, t.text, middle_left);
+    for (int d = 0; d < 2; d++) {
+      int8_t v = h.bioValid ? h.bio[e][d] : -1;
+      if (v < 0) {
+        text("–", bcol[d], y, FONT_SMALL, t.dim, middle_center);
+      } else {
+        chip(bcol[d], y, 66, v == 0 ? none : BIO_COLORS[v], v == 0 ? "–" : h.bioLabel[e][d], v == 2 ? 0x202020u : 0xFFFFFFu);
+      }
+    }
+  }
+  if (h.bioValid && h.advice[0]) wrapText(h.advice, 426, 408, 340, FONT_SMALL, t.dim, 21, 466);
 }
 
 // ---------------------------------------------------------------- Warnungen
@@ -418,6 +518,30 @@ void shirtIcon(int cx, int cy, uint32_t c) {
   canvas.fillTriangle(cx - 4, cy - 9, cx + 4, cy - 9, cx, cy - 4, 0x5A6478u);
 }
 
+void flowerIcon(int cx, int cy) {
+  for (int i = 0; i < 5; i++) {
+    float a = i * 2 * PI / 5 - PI / 2;
+    canvas.fillSmoothCircle(cx + cosf(a) * 8, cy + sinf(a) * 8, 6, 0xFDD835u);
+  }
+  canvas.fillSmoothCircle(cx, cy, 5, 0xFB8C00u);
+}
+
+void heartIcon(int cx, int cy) {
+  constexpr uint32_t C = 0xE53935u;
+  canvas.fillSmoothCircle(cx - 6, cy - 4, 7, C);
+  canvas.fillSmoothCircle(cx + 6, cy - 4, 7, C);
+  canvas.fillTriangle(cx - 13, cy - 1, cx + 13, cy - 1, cx, cy + 13, C);
+}
+
+void canIcon(int cx, int cy) {
+  constexpr uint32_t C = 0x8BC34Au;
+  canvas.fillSmoothRoundRect(cx - 10, cy - 6, 18, 16, 3, C);
+  canvas.drawWideLine(cx + 7, cy, cx + 16, cy - 9, 1.6f, C);
+  canvas.drawArc(cx - 1, cy - 6, 8, 6, 180, 360, C);
+  canvas.fillSmoothCircle(cx + 18, cy - 4, 2, RAIN);
+  canvas.fillSmoothCircle(cx + 16, cy + 3, 2, RAIN);
+}
+
 void hintIcon(HintKind kind, int cx, int cy, uint32_t bg) {
   constexpr int S = 40;
   switch (kind) {
@@ -434,6 +558,9 @@ void hintIcon(HintKind kind, int cx, int cy, uint32_t bg) {
     case HintKind::Wind: windIcon(cx, cy, 0xD8DEE8u); break;
     case HintKind::Umbrella: umbrellaIcon(cx, cy, RAIN, bg); break;
     case HintKind::Laundry: shirtIcon(cx, cy, 0xE0E6EEu); break;
+    case HintKind::Pollen: flowerIcon(cx, cy); break;
+    case HintKind::Bio: heartIcon(cx, cy); break;
+    case HintKind::Water: canIcon(cx, cy); break;
   }
 }
 

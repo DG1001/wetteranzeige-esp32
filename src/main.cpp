@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <esp_task_wdt.h>
 #include <time.h>
 
 #include "config.h"
+#include "fetch.h"
 #include "lcd.h"
+#include "log.h"
 #include "model.h"
-#include "radar.h"
 #include "settings.h"
 #include "touch.h"
 #include "ui.h"
@@ -23,17 +25,18 @@ constexpr uint32_t ANIMATION_MS = 80;
 constexpr uint32_t PAGE_TIMEOUT_MS = 3 * 60 * 1000;  // danach zurück zur Übersicht
 constexpr uint32_t WAKE_MS = 60 * 1000;               // so lange weckt Antippen nachts das Display
 constexpr uint32_t PORTAL_MS = 5 * 60 * 1000;         // danach Neustart, falls nur das WLAN gefehlt hat
+// Überwachung: Hauptschleife per Watchdog, Abruf-Task und Speicher per eigener Prüfung
+constexpr uint32_t WATCHDOG_MS = 60 * 1000;
+constexpr uint32_t FETCH_STALL_MS = 5 * 60 * 1000;
+constexpr size_t MIN_FREE_INTERNAL = 24 * 1024;
+constexpr size_t MIN_BLOCK_INTERNAL = 8 * 1024;
 
 Model model;
-bool located = false;
 bool needRender = true;
 bool radarChanged = false;
 uint32_t renderedAt = 0;
 uint32_t lastAnimation = 0;
 uint32_t lastInteraction = 0;
-uint32_t lastWeatherOk = 0;
-uint32_t nextWeather = 0, nextAir = 0, nextWarnings = 0;
-int utcOffset = INT32_MIN;
 int lastMinute = -2;
 bool portalMode = false;
 uint32_t portalSince = 0;
@@ -61,8 +64,8 @@ bool connectWifi() {
   WiFi.begin(settings.ssid, settings.password);
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) delay(500);
   if (WiFi.status() != WL_CONNECTED) return false;
-  Serial.println("WLAN verbunden");
-  ui::status("WLAN verbunden", "Lade Wetterdaten …");
+  logf("WLAN verbunden, Signal %d dBm", WiFi.RSSI());
+  ui::status("WLAN verbunden", fetch::startupMessage());
   return true;
 }
 
@@ -82,7 +85,8 @@ void portalLoop() {
     WiFi.begin(settings.ssid, settings.password);
   }
   if (settings.ssid[0] && WiFi.status() == WL_CONNECTED) {
-    Serial.println("Gespeichertes WLAN wieder erreichbar, Neustart");
+    logf("Gespeichertes WLAN wieder erreichbar, Neustart");
+    delay(100);
     ESP.restart();
   }
   if (millis() - portalSince > PORTAL_MS && WiFi.softAPgetStationNum() == 0) ESP.restart();
@@ -91,18 +95,16 @@ void portalLoop() {
 
 // Nach dem Speichern auf der Webseite
 void onSettingsChanged(const web::Changes& c) {
-  if (c.location) {
-    located = false;
-    nextWeather = nextAir = nextWarnings = millis();
-  }
+  if (c.location) fetch::settingsChanged();
   applyBrightness();
   needRender = true;
 }
 
 // Status unter der Uhr: Zeitpunkt des letzten Abrufs oder ein Problem
 void updateStatus() {
+  uint32_t lastOk = fetch::source(fetch::WEATHER).lastOk;
   char stand[24];
-  time_t fetched = time(nullptr) - (millis() - lastWeatherOk) / 1000;
+  time_t fetched = time(nullptr) - (millis() - lastOk) / 1000;
   struct tm t;
   localtime_r(&fetched, &t);
   strftime(stand, sizeof(stand), "Stand %H:%M", &t);
@@ -110,54 +112,11 @@ void updateStatus() {
   model.statusWarn = true;
   if (WiFi.status() != WL_CONNECTED) {
     snprintf(model.status, sizeof(model.status), "Kein WLAN · %s", stand);
-  } else if (millis() - lastWeatherOk > 3 * WEATHER_INTERVAL_MS) {
+  } else if (millis() - lastOk > 3 * WEATHER_INTERVAL_MS) {
     snprintf(model.status, sizeof(model.status), "Abruf fehlgeschlagen · %s", stand);
   } else {
     model.statusWarn = false;
     strlcpy(model.status, stand, sizeof(model.status));
-  }
-}
-
-void updateWeather() {
-  if (!located) {
-    located = locate(model.loc);
-    if (located) radar::begin(model.loc);
-  }
-  bool ok = located && fetchWeather(model.loc, model.weather);
-  nextWeather = millis() + (ok ? WEATHER_INTERVAL_MS : WEATHER_RETRY_MS);
-  if (!ok) {
-    if (!model.weather.valid) ui::status("Wetterdaten nicht verfügbar", "Neuer Versuch in einer Minute");
-    return;
-  }
-  lastWeatherOk = millis();
-  if (model.weather.utcOffset != utcOffset) {
-    utcOffset = model.weather.utcOffset;
-    configTime(utcOffset, 0, "pool.ntp.org", "time.cloudflare.com");
-  }
-  evaluateOutdoor(model.weather, model.outdoor);
-  applyBrightness();
-}
-
-// Höchstens ein Abruf je Durchlauf, damit Touch und Animation nicht lange warten
-void network() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  if (due(nextWeather)) {
-    updateWeather();
-    needRender = true;
-  } else if (!model.weather.valid) {
-    return;
-  } else if (due(nextWarnings)) {
-    bool ok = fetchWarnings(model.loc, model.weather.utcOffset, model.warnings);
-    nextWarnings = millis() + (ok ? WARNINGS_INTERVAL_MS : WEATHER_RETRY_MS);
-    needRender = true;
-  } else if (due(nextAir)) {
-    bool ok = fetchAir(model.loc, model.air);
-    nextAir = millis() + (ok ? AIR_INTERVAL_MS : WEATHER_RETRY_MS);
-    if (model.page == Page::SkyAir) needRender = true;
-  } else if (!radar::hasMap() || (model.page == Page::Radar && radar::needsLoad())) {
-    // Die Karte wird schon vorab geladen, die Bilder erst auf der Radarseite
-    radar::loadStep();
-    radarChanged = true;
   }
 }
 
@@ -169,12 +128,14 @@ void show(Page page) {
 void onTap(int x, int y) {
   int day = Weather::TODAY;
   switch (ui::hit(model, x, y, day)) {
-    case ui::Target::Refresh:
+    case ui::Target::Refresh: {
+      ModelLock lock;
       strlcpy(model.status, "Aktualisiere …", sizeof(model.status));
       model.statusWarn = false;
       ui::render(model);
-      nextWeather = nextWarnings = nextAir = millis();
+      fetch::refreshAll();
       break;
+    }
     case ui::Target::Warnings:
       show(Page::Warnings);
       break;
@@ -222,14 +183,35 @@ void onSwipe(int direction) {  // +1 = nach links gewischt (weiter), -1 = nach r
   }
 }
 
+// Hängt der Abruf-Task oder wird der interne Speicher knapp, neu starten, statt still stehen zu bleiben
+void checkHealth() {
+  static uint32_t lastCheck = 0;
+  if (millis() - lastCheck < 10000) return;
+  lastCheck = millis();
+  if (WiFi.status() == WL_CONNECTED && millis() - fetch::heartbeat() > FETCH_STALL_MS) {
+    logf("Abruf-Task reagiert seit %lu s nicht, Neustart", (millis() - fetch::heartbeat()) / 1000);
+    delay(200);
+    ESP.restart();
+  }
+  size_t free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+  size_t block = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+  if (free < MIN_FREE_INTERNAL || block < MIN_BLOCK_INTERNAL) {
+    logf("Interner Speicher knapp (%u frei, größter Block %u), Neustart", free, block);
+    delay(200);
+    ESP.restart();
+  }
+}
+
 // Testbefehle über die serielle Schnittstelle (115200 Baud, eine Zeile je Befehl):
-//   seite N       Seite N anzeigen (0 Übersicht, 1 Draußen, 2 Radar, 3 48 Stunden, 4 Himmel & Luft, 5 Tag,
-//                 6 Warnungen, 7 Nacht, 8 Info)
+//   seite N       Seite N anzeigen (0 Übersicht, 1 Draußen, 2 Radar, 3 48 Stunden, 4 Himmel & Luft,
+//                 5 Gesundheit, 6 Tag, 7 Warnungen, 8 Nacht, 9 Info)
 //   tipp X Y      Antippen simulieren
 //   wisch l|r     Wischen nach links bzw. rechts
 //   pin           PIN ausgeben (nur über USB, für Tests der Webseite)
 //   einrichtung   Einrichtungs-Hotspot starten (Einstellungen bleiben, Neustart nach 5 Minuten)
 //   warnung B L   Warnungen für Breite B und Länge L laden (zum Testen der Warnungsseite)
+//   dither 0|1    Dithering des Hintergrunds aus- bzw. einschalten (zum Vergleich)
+//   pclk MHZ      Pixeltakt im Betrieb ändern (zum Vergleich der Bildwiederholrate)
 //   foto          Bildschirmfoto: Zeile „FOTO 800 480“, dann nach einem „G“ vom Rechner die Rohdaten
 //                 mit 460800 Baud
 void serialCommands() {
@@ -254,6 +236,12 @@ void serialCommands() {
       onTap(a, b);
     } else if (sscanf(line, "wisch %c", &dir) == 1) {
       onSwipe(dir == 'l' ? +1 : -1);
+    } else if (sscanf(line, "pclk %d", &a) == 1 && a >= 14 && a <= 30) {
+      lcd::setPixelClock(a * 1000000);
+      logf("Pixeltakt %d MHz", a);
+    } else if (sscanf(line, "dither %d", &a) == 1) {
+      ui::ditherEnabled = a != 0;
+      needRender = true;
     } else if (!strcmp(line, "einrichtung")) {
       startPortal();
     } else if (!strcmp(line, "pin")) {
@@ -262,8 +250,11 @@ void serialCommands() {
       Location other = model.loc;
       other.lat = lat;
       other.lon = lon;
-      fetchWarnings(other, model.weather.utcOffset, model.warnings);
-      nextWarnings = millis() + 30 * 60 * 1000;
+      static Warnings found;
+      if (fetchWarnings(other, model.weather.utcOffset, found)) {
+        ModelLock lock;
+        model.warnings = found;
+      }
       needRender = true;
     } else if (!strcmp(line, "foto")) {
       Serial.printf("FOTO %d %d\n", lcd::WIDTH, lcd::HEIGHT);
@@ -284,26 +275,43 @@ void serialCommands() {
 
 void setup() {
   Serial.begin(115200);
+  logf("Start, Grund: %d, Firmware vom %s %s", (int)esp_reset_reason(), __DATE__, __TIME__);
   loadSettings();
-  if (!lcd::begin()) Serial.println("Display konnte nicht initialisiert werden");
+  if (!lcd::begin()) logf("Display konnte nicht initialisiert werden");
   lcd::setBrightness(settings.brightDay);
-  if (!touch::begin()) Serial.println("Touch-Controller nicht gefunden");
-  Serial.printf("Freier interner Speicher: %u Bytes, PSRAM: %u Bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
-                heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  if (!touch::begin()) logf("Touch-Controller nicht gefunden");
+  logf("Freier interner Speicher: %u Bytes, PSRAM: %u Bytes", heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+       heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+
+  // Watchdog für die Hauptschleife; lange Vorgänge (Updates) setzen ihn zwischendurch zurück
+  esp_task_wdt_config_t wdt = {.timeout_ms = WATCHDOG_MS, .idle_core_mask = 0, .trigger_panic = true};
+  esp_task_wdt_reconfigure(&wdt);
+  esp_task_wdt_add(nullptr);
+
   if (connectWifi()) {
     web::beginStation(model, onSettingsChanged);
+    fetch::begin(model);
   } else {
     startPortal();
   }
 }
 
 void loop() {
+  esp_task_wdt_reset();
   web::loop();
   serialCommands();
   if (portalMode) {
     portalLoop();
     return;
   }
+  checkHealth();
+
+  if (fetch::takeChanged()) {
+    needRender = true;
+    applyBrightness();
+    if (!model.weather.valid) ui::status("WLAN verbunden", fetch::startupMessage());
+  }
+  if (fetch::takeRadarChanged()) radarChanged = true;
 
   int x, y;
   touch::Gesture gesture = touch::poll(x, y);
@@ -324,8 +332,6 @@ void loop() {
     }
   }
 
-  network();
-
   int minute = ui::minuteOfDay();
   if (minute != lastMinute) {
     lastMinute = minute;
@@ -336,14 +342,19 @@ void loop() {
     show(Page::Overview);
   }
 
-  if (!model.weather.valid) return;
+  if (!model.weather.valid) {
+    delay(20);
+    return;
+  }
   if (needRender) {
     needRender = false;
+    ModelLock lock;
     updateStatus();
     ui::render(model);
     renderedAt = lastAnimation = millis();
   } else if (ui::animated(model) && millis() - lastAnimation >= ANIMATION_MS) {
     lastAnimation = millis();
+    ModelLock lock;
     ui::animate(model, (millis() - renderedAt) / 1000.0f, radarChanged);
     radarChanged = false;
   }

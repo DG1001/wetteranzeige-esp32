@@ -113,7 +113,7 @@ void findWindow(const Weather& w, Outdoor& o) {
            windMax < 12 ? "wenig Wind" : windMax < 25 ? "leichter Wind" : "windig");
 }
 
-void findHints(const Weather& w, Outdoor& o) {
+void findHints(const Weather& w, const Health& health, const Garden& garden, Outdoor& o) {
   o.hintCount = 0;
   const int end = min(w.hours, w.nowHour + 24);
   char at[32];
@@ -193,15 +193,41 @@ void findHints(const Weather& w, Outdoor& o) {
         w.hHour[first + bestLen - 1] + 1);
   }
 
+  // Pollenflug heute ab „mittel“ (Stufe 2): stärkste Pollenart nennen
+  if (health.pollenValid) {
+    int top = -1;
+    for (int p = 0; p < Health::POLLEN; p++) {
+      if (top < 0 || health.pollen[p][0] > health.pollen[top][0]) top = p;
+    }
+    int level = health.pollen[top][0];
+    if (level >= 4) {
+      add(o, HintKind::Pollen, level >= 6 ? 6 : 5, "Pollenflug heute: %s %s", POLLEN_NAMES[top],
+          level >= 6 ? "hoch" : level == 5 ? "mittel bis hoch" : "mittel");
+    }
+  }
+  // Biowetter: nur hohe Belastungen
+  if (health.bioValid) {
+    for (int e = 0; e < Health::EFFECTS; e++) {
+      if (health.bio[e][0] >= 4) {
+        add(o, HintKind::Bio, 4, "Biowetter: hohe Belastung (%s)", BIO_NAMES[e]);
+        break;
+      }
+    }
+  }
+  // Gießen: deutlich zu wenig Regen und keiner in Sicht
+  if (garden.valid && garden.balance <= -10 && garden.rainSoon < 5) {
+    add(o, HintKind::Water, 4, "Gießen: in 7 Tagen %d mm zu wenig Regen", (int)lroundf(-garden.balance));
+  }
+
   std::stable_sort(o.hints, o.hints + o.hintCount, [](const Hint& a, const Hint& b) { return a.priority > b.priority; });
 }
 
 }  // namespace
 
-void evaluateOutdoor(const Weather& w, Outdoor& out) {
+void evaluateOutdoor(const Weather& w, const Health& health, const Garden& garden, Outdoor& out) {
   if (!w.valid) return;
   findWindow(w, out);
-  findHints(w, out);
+  findHints(w, health, garden, out);
 }
 
 void bestTimeText(const Outdoor& o, char* buf, size_t len) {

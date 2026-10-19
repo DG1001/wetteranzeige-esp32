@@ -147,6 +147,8 @@ void formatDecimal(char* buf, size_t len, float v, int decimals) {
 
 bool inRect(int x, int y, int rx, int ry, int rw, int rh) { return x >= rx && x < rx + rw && y >= ry && y < ry + rh; }
 
+bool ditherEnabled = true;
+
 namespace {
 
 // 4x4-Bayer-Matrix, Schwellen 0 bis 15
@@ -157,7 +159,7 @@ constexpr uint8_t BAYER[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {
 void ditherRow(int x, int y, int w, float r, float g, float b) {
   uint16_t pattern[4];
   for (int i = 0; i < 4; i++) {
-    float thr = (BAYER[y & 3][(x + i) & 3] + 0.5f) / 16.0f;
+    float thr = ditherEnabled ? (BAYER[y & 3][(x + i) & 3] + 0.5f) / 16.0f : 0.5f;
     int r5 = min(31, (int)(r * 31 / 255 + thr));
     int g6 = min(63, (int)(g * 63 / 255 + thr));
     int b5 = min(31, (int)(b * 31 / 255 + thr));
@@ -187,8 +189,11 @@ void glass(const Theme& t, int x, int y, int w, int h, int r) {
   // Zeilenweise nachfärben, damit die Karte dem Verlauf folgt; die Ecken behalten die Mittelfarbe
   const uint32_t top = mixColor(t.top, t.glass, alpha), bottom = mixColor(t.bottom, t.glass, alpha);
   for (int row = 0; row < h; row++) {
-    bool corner = row < r || row >= h - r;
-    ditherRow(corner ? x + r : x, y + row, corner ? w - 2 * r : w, top, bottom, (y + row) / (float)(H - 1));
+    // In den Eckzeilen nur innerhalb der Rundung; das äußerste, geglättete Pixel bleibt
+    int inset = 0;
+    int d = row < r ? r - row : row >= h - r ? row - (h - r - 1) : 0;
+    if (d > 0) inset = r - (int)floorf(sqrtf((float)r * r - (d - 0.5f) * (d - 0.5f))) + 1;
+    ditherRow(x + inset, y + row, w - 2 * inset, top, bottom, (y + row) / (float)(H - 1));
   }
 }
 
