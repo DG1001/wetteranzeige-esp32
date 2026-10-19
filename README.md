@@ -99,3 +99,7 @@ Alternativ auf der Webseite unter „Firmware-Update“ die Datei `.pio/build/es
 ## Schriften
 
 Die Schriften in `include/fonts/` werden aus **DejaVu Sans** erzeugt (Bitstream Vera License, Änderungen von DejaVu gemeinfrei, Lizenztext in [`include/fonts/LICENSE-DejaVu.txt`](include/fonts/LICENSE-DejaVu.txt)). Neu erzeugen geht mit `python3 tools/make_vlw.py`. Dafür werden Pillow und matplotlib gebraucht, weil matplotlib die DejaVu-Dateien mitliefert.
+
+## Lizenz
+
+Der Code steht unter der [MIT-Lizenz](LICENSE). Die erzeugten Schriften in `include/fonts/` unterliegen der Lizenz von DejaVu bzw. Bitstream Vera (siehe oben). Die angezeigten Daten stammen von Open-Meteo und vom Deutschen Wetterdienst und unterliegen deren Nutzungsbedingungen.
