@@ -1,18 +1,20 @@
 #pragma once
 
 #include "air.h"
+#include "outdoor.h"
 #include "warnings.h"
 #include "weather.h"
 
-// Seiten; die ersten vier erreicht man per Wischen, die übrigen per Antippen
-enum class Page { Overview, Radar, Hours, SkyAir, Day, Warnings };
-constexpr int MAIN_PAGES = 4;
+// Seiten; die ersten fünf erreicht man per Wischen, die übrigen per Antippen, langes Drücken bzw. nachts
+enum class Page { Overview, Outdoor, Radar, Hours, SkyAir, Day, Warnings, Night, Info };
+constexpr int MAIN_PAGES = 5;
 
 struct Model {
   Location loc;
   Weather weather;
   Air air;
   Warnings warnings;
+  Outdoor outdoor;
 
   Page page = Page::Overview;
   int day = Weather::TODAY;  // Tag für die Tagesansicht

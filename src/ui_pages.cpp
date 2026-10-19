@@ -3,6 +3,8 @@
 #include <time.h>
 
 #include "astro.h"
+#include "settings.h"
+#include <WiFi.h>
 #include "icons.h"
 #include "ui_common.h"
 #include "ui_pages.h"
@@ -120,15 +122,6 @@ void overview(const Model& m, const Theme& t) {
   formatTemp(buf, sizeof(buf), w.temp);
   text(buf, 222, 204, FONT_HUGE, t.text, baseline_left);
   text(weatherText(w.code), 228, 212, FONT_TEXT, t.dim);
-  bool rain = nowcastText(w, buf, sizeof(buf));
-  if (buf[0]) {
-    int x = 228;
-    if (rain) {
-      drop(x + 5, 254, RAIN);
-      x += 16;
-    }
-    text(buf, x, 244, FONT_SMALL, rain ? RAIN : t.dim);
-  }
 
   const int x = 500, y = 88, wd = 284, h = 170;
   glass(t, x, y, wd, h);
@@ -396,6 +389,179 @@ void warnings(const Model& m, const Theme& t) {
     y += h + GAP;
   }
   if (ws.count == 0) text("Keine Warnungen", 400, 270, FONT_TEXT, t.dim, middle_center);
+}
+
+// ---------------------------------------------------------------- Draußen
+
+namespace {
+
+void windIcon(int cx, int cy, uint32_t c) {
+  canvas.drawWideLine(cx - 15, cy - 7, cx + 6, cy - 7, 1.6f, c);
+  canvas.drawArc(cx + 6, cy - 11, 4, 3, 270, 90, c);
+  canvas.drawWideLine(cx - 15, cy, cx + 11, cy, 1.6f, c);
+  canvas.drawWideLine(cx - 15, cy + 7, cx + 2, cy + 7, 1.6f, c);
+  canvas.drawArc(cx + 2, cy + 11, 4, 3, 270, 90, c);
+}
+
+void umbrellaIcon(int cx, int cy, uint32_t c, uint32_t bg) {
+  canvas.fillSmoothCircle(cx, cy - 2, 15, c);
+  canvas.fillRect(cx - 16, cy - 1, 33, 18, bg);
+  for (int i = -1; i <= 1; i++) canvas.fillSmoothCircle(cx + i * 10, cy, 5, bg);
+  canvas.drawWideLine(cx, cy - 2, cx, cy + 13, 1.3f, c);
+  canvas.drawArc(cx - 4, cy + 13, 4, 3, 0, 180, c);
+}
+
+void shirtIcon(int cx, int cy, uint32_t c) {
+  canvas.fillRect(cx - 8, cy - 9, 16, 22, c);
+  canvas.fillTriangle(cx - 8, cy - 9, cx - 17, cy - 2, cx - 8, cy + 3, c);
+  canvas.fillTriangle(cx + 8, cy - 9, cx + 17, cy - 2, cx + 8, cy + 3, c);
+  canvas.fillTriangle(cx - 4, cy - 9, cx + 4, cy - 9, cx, cy - 4, 0x5A6478u);
+}
+
+void hintIcon(HintKind kind, int cx, int cy, uint32_t bg) {
+  constexpr int S = 40;
+  switch (kind) {
+    case HintKind::Thunder: drawWeatherIcon(canvas, 95, true, cx, cy, S, bg); break;
+    case HintKind::Ice: drawWeatherIcon(canvas, 66, true, cx, cy, S, bg); break;
+    case HintKind::HeavyRain: drawWeatherIcon(canvas, 65, true, cx, cy, S, bg); break;
+    case HintKind::Snow:
+    case HintKind::Frost:
+    case HintKind::GroundFrost: drawWeatherIcon(canvas, 71, true, cx, cy, S, bg); break;
+    case HintKind::Heat:
+    case HintKind::Uv: drawWeatherIcon(canvas, 0, true, cx, cy, S, bg); break;
+    case HintKind::Fog: drawWeatherIcon(canvas, 45, true, cx, cy, S, bg); break;
+    case HintKind::Storm: windIcon(cx, cy, WARN); break;
+    case HintKind::Wind: windIcon(cx, cy, 0xD8DEE8u); break;
+    case HintKind::Umbrella: umbrellaIcon(cx, cy, RAIN, bg); break;
+    case HintKind::Laundry: shirtIcon(cx, cy, 0xE0E6EEu); break;
+  }
+}
+
+uint32_t scoreColor(int score) {
+  if (score >= 75) return 0x43A047u;
+  if (score >= GOOD_SCORE) return 0x7CB342u;
+  if (score >= 30) return 0xC9A825u;
+  return 0x9E5A4Au;
+}
+
+}  // namespace
+
+void outdoor(const Model& m, const Theme& t) {
+  const Weather& w = m.weather;
+  const Outdoor& o = m.outdoor;
+  char buf[96];
+
+  glass(t, 16, 88, 768, 176);
+  snprintf(buf, sizeof(buf), "Beste Zeit draußen %s", o.day == Weather::TODAY ? "heute" : "morgen");
+  text(buf, 34, 102, FONT_TITLE, t.text);
+  if (o.found) {
+    snprintf(buf, sizeof(buf), "%d – %d Uhr", o.startHour, o.endHour);
+    text(buf, 34, 132, FONT_BOLD, t.text);
+    text(o.summary, 34 + textWidth(buf, FONT_BOLD) + 20, 138, FONT_TEXT, t.dim);
+  } else {
+    text("Kein gutes Wetter für draußen", 34, 136, FONT_TEXT, t.dim);
+  }
+
+  // Stundenleiste des Tages: grün = gut, gelb = mäßig, rot = schlecht, dunkel = Nacht oder vorbei
+  const int x0 = 34, x1 = 766, by = 186, bh = 22;
+  if (o.count > 0) {
+    auto sx = [&](int k) { return x0 + (x1 - x0) * k / o.count; };
+    for (int k = 0; k < o.count; k++) {
+      int i = o.firstIndex + k;
+      bool past = o.day == Weather::TODAY && i < w.nowHour;
+      uint32_t c = past ? 0x3A4455u : !w.hIsDay[i] ? 0x232B3Au : scoreColor(o.score[k]);
+      canvas.fillRect(sx(k) + 1, by, sx(k + 1) - sx(k) - 2, bh, c);
+      if (w.hHour[i] % 3 == 0) {
+        snprintf(buf, sizeof(buf), "%d", w.hHour[i]);
+        text(buf, sx(k), by + bh + 14, FONT_SMALL, t.dim, middle_left);
+      }
+    }
+    if (o.found) {
+      int a = -1, b = -1;
+      for (int k = 0; k < o.count; k++) {
+        int h = w.hHour[o.firstIndex + k];
+        if (h == o.startHour && a < 0) a = k;
+        if (h == o.endHour - 1) b = k;
+      }
+      if (a >= 0 && b >= a) {
+        canvas.drawRoundRect(sx(a) - 2, by - 4, sx(b + 1) - sx(a) + 3, bh + 8, 5, t.text);
+        canvas.drawRoundRect(sx(a) - 1, by - 3, sx(b + 1) - sx(a) + 1, bh + 6, 4, t.text);
+      }
+    }
+    if (o.day == Weather::TODAY) {
+      int k = w.nowHour - o.firstIndex;
+      struct tm now;
+      if (k >= 0 && k < o.count && localNow(now)) {
+        int nx = sx(k) + (sx(k + 1) - sx(k)) * now.tm_min / 60;
+        canvas.fillTriangle(nx, by - 2, nx - 6, by - 10, nx + 6, by - 10, t.text);
+      }
+    }
+  }
+
+  glass(t, 16, 272, 768, 200);
+  text("Hinweise", 34, 286, FONT_TITLE, t.text);
+  if (o.hintCount == 0) {
+    text("Keine besonderen Hinweise", 34, 330, FONT_TEXT, t.dim, middle_left);
+  }
+  for (int k = 0; k < min(4, o.hintCount); k++) {
+    const Hint& h = o.hints[k];
+    int y = 330 + k * 38;
+    hintIcon(h.kind, 56, y, skyAt(t, y));
+    text(h.text, 90, y, FONT_TEXT, h.priority >= 8 ? WARN : t.text, middle_left);
+  }
+  if (o.hintCount > 4) {
+    snprintf(buf, sizeof(buf), "+%d weitere", o.hintCount - 4);
+    text(buf, 766, 286, FONT_SMALL, t.dim, top_right);
+  }
+}
+
+// ---------------------------------------------------------------- Nacht
+
+void night(const Model& m) {
+  canvas.fillScreen(0x000000);
+  if (settings.nightOff) return;
+  constexpr uint32_t CLOCK = 0x8E9BB3u, DIM = 0x4E586Au;
+  struct tm now;
+  char buf[48];
+  if (localNow(now)) {
+    strftime(buf, sizeof(buf), "%H:%M", &now);
+    text(buf, 400, 190, FONT_HUGE, CLOCK, middle_center);
+    snprintf(buf, sizeof(buf), "%s, %d. %s", WEEKDAYS[now.tm_wday], now.tm_mday, MONTHS[now.tm_mon]);
+    text(buf, 400, 284, FONT_TEXT, DIM, middle_center);
+  }
+  const Weather& w = m.weather;
+  formatTemp(buf, sizeof(buf), w.temp);
+  int tw = textWidth(buf, FONT_BOLD) + 60;
+  drawWeatherIcon(canvas, w.code, w.isDay, 400 - tw / 2 + 22, 360, 48, 0x000000);
+  text(buf, 400 - tw / 2 + 56, 362, FONT_BOLD, CLOCK, middle_left);
+  if (m.warnings.count > 0) {
+    char name[40];
+    titleCase(m.warnings.item[0].event, name, sizeof(name));
+    snprintf(buf, sizeof(buf), "Warnung: %s", name);
+    text(buf, 400, 430, FONT_TEXT, warnColor(m.warnings.item[0].level), middle_center);
+  }
+}
+
+// ---------------------------------------------------------------- Info
+
+void info(const Model& m, const Theme& t) {
+  glass(t, 16, 88, 768, 384);
+  text("Einstellungen im Browser", 34, 104, FONT_TITLE, t.text);
+  String ip = WiFi.localIP().toString();
+  char buf[96];
+  text("http://wetteranzeige.local", 34, 150, FONT_TEXT, t.text);
+  snprintf(buf, sizeof(buf), "oder http://%s", ip.c_str());
+  text(buf, 34, 184, FONT_TEXT, t.dim);
+  text("Benutzer", 34, 240, FONT_SMALL, t.dim);
+  text("admin", 160, 236, FONT_TEXT, t.text);
+  text("PIN", 34, 276, FONT_SMALL, t.dim);
+  text(settings.pin, 160, 272, FONT_TEXT, t.text);
+  text("Dort: Ort, Helligkeit, Nachtmodus, WLAN,", 34, 336, FONT_SMALL, t.dim);
+  text("Bildschirmfoto und Firmware-Update.", 34, 360, FONT_SMALL, t.dim);
+  text("Antippen: zurück", 34, 430, FONT_SMALL, t.dim);
+  snprintf(buf, sizeof(buf), "http://%s/", ip.c_str());
+  canvas.fillSmoothRoundRect(520, 120, 240, 240, 12, 0xFFFFFFu);
+  canvas.qrcode(buf, 530, 130, 220, 2, true);
 }
 
 }  // namespace ui

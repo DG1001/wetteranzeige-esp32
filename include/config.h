@@ -1,5 +1,6 @@
 #pragma once
 
+// Vorgaben für den allerersten Start; danach gelten die Einstellungen von der Webseite (NVS).
 // Standort: bei leerem Namen wird der Ort automatisch über die IP-Adresse bestimmt.
 // Beispiel für einen festen Ort:  "Frankfurt", 50.1109f, 8.6821f
 #define LOCATION_NAME "Künzelsau"
@@ -14,6 +15,6 @@
 // Wartezeit bis zum nächsten Versuch, wenn ein Abruf fehlschlägt
 #define WEATHER_RETRY_MS (60UL * 1000UL)
 
-// Helligkeit der Hintergrundbeleuchtung (0-255) tagsüber und nachts
+// Helligkeit der Hintergrundbeleuchtung (0-255) tagsüber und nachts (Vorgabe für den ersten Start)
 #define BRIGHTNESS_DAY 220
 #define BRIGHTNESS_NIGHT 60

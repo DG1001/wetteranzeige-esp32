@@ -7,3 +7,5 @@
 bool httpGetJson(const String& url, JsonDocument& doc);
 // Lädt die Antwort in einen Puffer im PSRAM; Freigabe mit free(). nullptr bei Fehler.
 uint8_t* httpGetBytes(const String& url, size_t& len, size_t maxLen);
+// Prozentkodierung für URL-Parameter (UTF-8 bleibt erhalten)
+String urlEncode(const char* s);

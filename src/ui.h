@@ -8,6 +8,8 @@ enum class Target { None, Refresh, Warnings, Hours, Day, Back, Pause };
 
 // Vollbild-Meldung, z. B. während der WLAN-Verbindung
 void status(const char* title, const char* detail);
+// Anleitung für den Einrichtungs-Hotspot mit QR-Code zum Verbinden
+void portal(const char* apName, const char* password);
 // Zeichnet die aktuelle Seite komplett neu
 void render(const Model& m);
 // Ob die Seite bewegte Teile hat

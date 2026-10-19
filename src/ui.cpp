@@ -16,10 +16,67 @@ namespace {
 constexpr int MAP_Y = HEADER_H + 2;
 constexpr float FRAME_S = 0.5f;  // Anzeigedauer eines Radarbilds
 constexpr float HOLD_S = 1.2f;   // Pause am Ende der Bildfolge
+constexpr float TICKER_S = 6;    // Anzeigedauer eines Eintrags der wechselnden Zeile
 
 Theme theme;
-uint16_t* iconBackground = nullptr;  // Hintergrund unter dem animierten Wettersymbol
+uint16_t* iconBackground = nullptr;    // Hintergrund unter dem animierten Wettersymbol
+uint16_t* tickerBackground = nullptr;  // Hintergrund unter der wechselnden Zeile
 int shownFrame = -1;
+
+// Wechselnde Zeile der Übersicht: Regenhinweis, beste Zeit draußen, wichtige Hinweise
+struct TickerItem {
+  char text[80];
+  uint32_t color;
+  bool rain;
+};
+TickerItem ticker[4];
+int tickerCount = 0;
+int tickerShown = 0;
+int tickerPending = 0;  // in wie viele Bildspeicher der aktuelle Eintrag noch muss
+
+void buildTicker(const Model& m) {
+  tickerCount = 0;
+  TickerItem& rain = ticker[tickerCount];
+  rain.rain = nowcastText(m.weather, rain.text, sizeof(rain.text));
+  rain.color = rain.rain ? RAIN : theme.dim;
+  if (rain.text[0]) tickerCount++;
+  TickerItem& best = ticker[tickerCount++];
+  bestTimeText(m.outdoor, best.text, sizeof(best.text));
+  best.color = theme.dim;
+  best.rain = false;
+  for (int i = 0; i < m.outdoor.hintCount && tickerCount < 4; i++) {
+    const Hint& h = m.outdoor.hints[i];
+    if (h.priority < 5) break;
+    TickerItem& item = ticker[tickerCount++];
+    strlcpy(item.text, h.text, sizeof(item.text));
+    item.color = h.priority >= 8 ? WARN : theme.text;
+    item.rain = false;
+  }
+}
+
+void drawTicker(int index) {
+  const TickerItem& item = ticker[index];
+  int x = TICKER_X + 4;
+  if (item.rain) {
+    canvas.fillSmoothCircle(x + 5, TICKER_Y + 17, 4, RAIN);
+    canvas.fillTriangle(x + 1, TICKER_Y + 16, x + 9, TICKER_Y + 16, x + 5, TICKER_Y + 8, RAIN);
+    x += 16;
+  }
+  // Auf die verfügbare Breite kürzen, UTF-8-Zeichen nicht zerschneiden
+  char buf[84];
+  strlcpy(buf, item.text, sizeof(buf));
+  const int maxW = TICKER_X + TICKER_W - x;
+  if (textWidth(buf, FONT_SMALL) > maxW) {
+    size_t len = strlen(buf);
+    do {
+      do {
+        len--;
+      } while (len > 0 && (buf[len] & 0xC0) == 0x80);
+      strcpy(buf + len, "…");
+    } while (len > 0 && textWidth(buf, FONT_SMALL) > maxW);
+  }
+  text(buf, x, TICKER_Y + 4, FONT_SMALL, item.color);
+}
 
 uint32_t timeColor(int frame) { return frame < radar::NOW_FRAME ? 0xB0BCCCu : frame == radar::NOW_FRAME ? 0xFFFFFFu : RAIN; }
 
@@ -135,6 +192,28 @@ void drawIcon(const Model& m, float t) {
 
 }  // namespace
 
+void portal(const char* apName, const char* password) {
+  Theme t{0x0E1830u, 0x050A14u, 0xFFFFFFu, 0x8593ABu, 0xFFFFFFu, 18, true};
+  background(t);
+  text("Einrichtung", 40, 36, FONT_BOLD, t.text);
+  text("1. Mit dem WLAN der Anzeige verbinden", 40, 104, FONT_TEXT, t.text);
+  text("QR-Code scannen oder von Hand:", 64, 140, FONT_SMALL, t.dim);
+  char buf[96];
+  snprintf(buf, sizeof(buf), "Name: %s", apName);
+  text(buf, 64, 166, FONT_TEXT, t.dim);
+  snprintf(buf, sizeof(buf), "Passwort: %s", password);
+  text(buf, 64, 198, FONT_TEXT, t.dim);
+  text("2. Die Einrichtungsseite öffnet sich", 40, 252, FONT_TEXT, t.text);
+  text("selbst, sonst http://192.168.4.1", 64, 286, FONT_TEXT, t.dim);
+  text("3. WLAN und Ort eintragen, speichern", 40, 340, FONT_TEXT, t.text);
+  text("Ist das gespeicherte WLAN wieder erreichbar, startet die Anzeige von selbst neu.", 40, 430, FONT_SMALL, t.dim);
+  snprintf(buf, sizeof(buf), "WIFI:T:WPA;S:%s;P:%s;;", apName, password);
+  canvas.fillSmoothRoundRect(560, 104, 210, 210, 12, 0xFFFFFFu);
+  canvas.qrcode(buf, 568, 112, 194, 3, true);
+  lcd::show();
+  lcd::syncBack();
+}
+
 void status(const char* title, const char* detail) {
   Theme t{0x0E1830u, 0x050A14u, 0xFFFFFFu, 0x8593ABu, 0xFFFFFFu, 18, true};
   background(t);
@@ -146,6 +225,12 @@ void status(const char* title, const char* detail) {
 
 void render(const Model& m) {
   theme = skyTheme(m.weather, minuteOfDay());
+  if (m.page == Page::Night) {
+    night(m);
+    lcd::show();
+    lcd::syncBack();
+    return;
+  }
   background(theme);
   header(m, theme);
 
@@ -153,8 +238,22 @@ void render(const Model& m) {
     case Page::Overview:
       overview(m, theme);
       if (!iconBackground) iconBackground = (uint16_t*)heap_caps_malloc(ICON_W * ICON_H * 2, MALLOC_CAP_SPIRAM);
+      if (!tickerBackground) tickerBackground = (uint16_t*)heap_caps_malloc(TICKER_W * TICKER_H * 2, MALLOC_CAP_SPIRAM);
       if (iconBackground) lcd::saveRect(iconBackground, ICON_X, ICON_Y, ICON_W, ICON_H);
+      if (tickerBackground) lcd::saveRect(tickerBackground, TICKER_X, TICKER_Y, TICKER_W, TICKER_H);
+      buildTicker(m);
+      tickerShown = 0;
+      tickerPending = 0;
+      drawTicker(0);
       drawIcon(m, 0);
+      break;
+    case Page::Outdoor:
+      outdoor(m, theme);
+      break;
+    case Page::Info:
+      info(m, theme);
+      break;
+    case Page::Night:
       break;
     case Page::Radar:
       shownFrame = radarFrameAt(m, 0);
@@ -183,6 +282,16 @@ void animate(const Model& m, float t, bool force) {
   if (m.page == Page::Overview && iconBackground) {
     lcd::restoreRect(iconBackground, ICON_X, ICON_Y, ICON_W, ICON_H);
     drawIcon(m, t);
+    int index = tickerCount ? (int)(t / TICKER_S) % tickerCount : 0;
+    if (index != tickerShown) {
+      tickerShown = index;
+      tickerPending = 2;  // beide Bildspeicher
+    }
+    if (tickerPending > 0 && tickerBackground) {
+      lcd::restoreRect(tickerBackground, TICKER_X, TICKER_Y, TICKER_W, TICKER_H);
+      drawTicker(tickerShown);
+      tickerPending--;
+    }
     lcd::show();
   } else if (m.page == Page::Radar) {
     int frame = radarFrameAt(m, t);
@@ -211,6 +320,7 @@ Target hit(const Model& m, int x, int y, int& day) {
       return Target::Pause;
     case Page::Day:
     case Page::Warnings:
+    case Page::Info:
       return Target::Back;
     default:
       return Target::None;

@@ -2,22 +2,24 @@
 
 ## Zweck
 
-Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen Blick zeigt sie, wie das Wetter jetzt ist und wie es wird. Per Wischen und Antippen gibt es Details: Regenradar, Stundenverlauf, Tagesansichten, Sonne und Mond, Luftqualität und Pollen sowie amtliche Unwetterwarnungen.
+Eine Wetteranzeige für einen festen Ort, die ohne Bedienung läuft. Auf einen Blick zeigt sie, wie das Wetter jetzt ist und wie es wird. Per Wischen und Antippen gibt es Details: die beste Zeit für draußen mit Hinweisen, Regenradar, Stundenverlauf, Tagesansichten, Sonne und Mond, Luftqualität und Pollen sowie amtliche Unwetterwarnungen. Nachts kann sie auf eine gedimmte Uhr umschalten oder ganz dunkel werden. Eingerichtet und aktualisiert wird sie über das WLAN.
 
 ## Bedienung
 
 | Geste | Wirkung |
 |---|---|
-| Nach links / rechts wischen | Nächste / vorige Seite: Übersicht → Radar → 48 Stunden → Himmel & Luft |
+| Nach links / rechts wischen | Nächste / vorige Seite: Übersicht → Draußen → Radar → 48 Stunden → Himmel & Luft |
 | Tageskachel antippen (Übersicht) | Tagesansicht dieses Tages |
 | In der Tagesansicht wischen | Nächster / voriger Tag |
 | Stundenkarte antippen (Übersicht) | Seite „48 Stunden“ |
 | Warnsymbol antippen (Kopfzeile) | Warnungen mit vollständigem Text |
 | Sonst auf der Übersicht antippen | Alle Daten sofort neu abrufen |
 | Radar antippen | Animation anhalten / fortsetzen |
-| Tagesansicht oder Warnungen antippen | Zurück zur Übersicht |
+| Tagesansicht, Warnungen oder Infoseite antippen | Zurück zur Übersicht |
+| 2 Sekunden gedrückt halten | Infoseite: Adresse der Webseite, PIN, QR-Code |
+| Nachts antippen | Display für 1 Minute wecken |
 
-Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Punkte unter der Kopfzeile zeigen, auf welcher der vier Wischseiten man ist.
+Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Punkte unter der Kopfzeile zeigen, auf welcher der fünf Wischseiten man ist.
 
 ## Kopfzeile (auf allen Seiten)
 
@@ -35,13 +37,40 @@ Nach 3 Minuten ohne Berührung kehrt die Anzeige zur Übersicht zurück. Die Pun
 ### Übersicht
 - **Wettersymbol, animiert:** Sonnenstrahlen drehen sich, Wolken ziehen, Regen und Schnee fallen, Blitze zucken, nachts funkeln Sterne um den Mond
 - **Temperatur**, **Beschreibung** (z. B. „Teilweise bewölkt“)
-- **Regenhinweis für die nächsten 2 Stunden**, aus der 15-Minuten-Vorhersage:
-  - „Regen ab ca. 14:30“ bzw. „Regen endet gegen 15:15“ (blau, mit Tropfen)
-  - „Regen hält an“
-  - „Nächste 2 Stunden trocken“
+- **Wechselnde Zeile** darunter, alle 6 Sekunden:
+  - Regenhinweis für die nächsten 2 Stunden aus der 15-Minuten-Vorhersage: „Regen ab ca. 14:30“ bzw. „Regen endet gegen 15:15“ (blau, mit Tropfen), „Regen hält an“ oder „Nächste 2 Stunden trocken“
+  - beste Zeit draußen, z. B. „Draußen ideal: 11–19 Uhr“ bzw. „Morgen ideal: …“
+  - wichtige Hinweise von der Seite „Draußen“ (ab mittlerer Wichtigkeit, höchstens zwei; sehr wichtige in Orange)
+  - zu lange Texte werden mit „…“ gekürzt
 - **Details:** gefühlte Temperatur, Luftfeuchte, Wind mit Richtung, Luftdruck (am Standort), Sonnenauf- und -untergang
 - **Nächste 24 Stunden:** Temperaturkurve, Regenwahrscheinlichkeit als Balken
 - **6 Tage** ab heute: Symbol, Höchst- und Tiefstwert, Regenwahrscheinlichkeit
+
+### Draußen
+**Beste Zeit draußen:** Jede Stunde mit Tageslicht bekommt eine Bewertung von 0 bis 100:
+- Abzüge für Regenwahrscheinlichkeit und Regen, Kälte unter 15° (höchstens 35 Punkte), Hitze über 26°, Wind über 20 km/h, Böen über 45 km/h, Gewitter, Schnee, Nebel und geschlossene Bewölkung
+- ein kleiner Bonus für Sonne
+- Stunden in der Nacht oder in der Vergangenheit zählen nicht
+
+Genannt wird der zusammenhängende Zeitraum mit den besten Stunden des Tages: mindestens 50 Punkte und höchstens 12 Punkte unter dem Tagesbestwert. Dazu kommt eine Zusammenfassung wie „trocken · 12–16° · leichter Wind“. Bleiben heute weniger als 2 Stunden Tageslicht, gilt das für morgen. Eine Stundenleiste zeigt den ganzen Tag: grün = gut, gelb = mäßig, rot = schlecht, dunkel = Nacht, grau = vorbei. Der empfohlene Zeitraum ist eingerahmt, ein Pfeil markiert jetzt.
+
+**Hinweise** für die nächsten 24 Stunden, nach Wichtigkeit (höchstens 4 sichtbar):
+
+| Hinweis | Bedingung | Wichtigkeit |
+|---|---|---|
+| Gewitter möglich um … | Gewitter-Wettercode | 9 |
+| Glättegefahr um … | Regen bei höchstens 1° | 9 |
+| Sturmböen bis … km/h | Böen ab 65 km/h | 8 |
+| Starkregen um … | ab 5 mm in einer Stunde | 8 |
+| Schnee um … | Schnee-Wettercode | 7 |
+| Frost bis …°: Pflanzen schützen | nachts höchstens 0° | 7 |
+| Schirm mitnehmen: Regen um … | tagsüber Regenwahrscheinlichkeit ab 60 % | 6 |
+| Heiß bis …°: viel trinken | Höchstwert ab 30° | 6 |
+| Bodenfrost möglich | nachts höchstens 3° | 5 |
+| UV-Index bis …: Sonnenschutz | UV-Maximum ab 6 | 5 |
+| Windig, Böen bis … km/h | Böen 50 bis 65 km/h | 4 |
+| Nebel um … | Nebel in den nächsten 12 Stunden | 4 |
+| Gutes Wetter zum Wäschetrocknen | mindestens 5 Stunden trocken, ab 8°, Luftfeuchte unter 75 % oder Wind ab 10 km/h | 3 |
 
 ### Regenradar
 - Karte von etwa 300 km × 150 km rund um den Ort: abgedunkeltes Relief, Flüsse, Landesgrenzen, Städte. Der eigene Ort ist hervorgehoben.
@@ -80,6 +109,25 @@ Stündlicher Verlauf ab jetzt:
 ### Warnungen
 Alle aktuellen amtlichen Warnungen und Vorabinformationen des DWD für die Gemeinde am Standort, nach Stufe sortiert. Jede Warnung zeigt Überschrift, Zeitraum, Beschreibung und Handlungsempfehlung. Lange Texte werden mit „…“ gekürzt.
 
+### Nacht
+Im eingestellten Zeitraum (z. B. 22:30 bis 6:30) zeigt die Anzeige eine große, gedimmte Uhr mit Datum, Temperatur und gegebenenfalls einer Warnung, auf schwarzem Grund. Alternativ wird das Display ganz dunkel. Antippen weckt die normale Anzeige für eine Minute. Der Nachtmodus wird auf der Webseite eingeschaltet, ab Werk ist er aus.
+
+### Infoseite
+Adresse der Webseite (`http://wetteranzeige.local` und die IP-Adresse), Benutzer `admin`, PIN und ein QR-Code mit der Adresse.
+
+## Einrichtung und Webseite
+- **Erster Start oder WLAN nicht erreichbar:** Die Anzeige öffnet einen eigenen Hotspot „Wetteranzeige“. Das Passwort ist die PIN, der Bildschirm zeigt sie zusammen mit einem QR-Code zum Verbinden. Nach dem Verbinden öffnet sich die Einrichtungsseite (sonst `http://192.168.4.1`). Dort WLAN wählen, Passwort und Ort eintragen und speichern, danach startet die Anzeige neu.
+  - Ist niemand mit dem Hotspot verbunden, versucht die Anzeige alle 30 Sekunden das gespeicherte WLAN und startet neu, sobald es erreichbar ist. Das hilft etwa, wenn der Router nach einem Stromausfall länger braucht. Nach 5 Minuten ohne Eingabe startet sie ebenfalls neu.
+- **Webseite** im Heimnetz unter `http://wetteranzeige.local`, Benutzer `admin`, Passwort = PIN:
+  - Ort per Name (wird gesucht, Treffer in Deutschland bevorzugt) oder mit Koordinaten; leer = Bestimmung über die IP-Adresse
+  - Helligkeit tagsüber und nachts
+  - Nachtmodus: ein/aus, Beginn, Ende, gedimmte Uhr oder Display aus, Helligkeit der Uhr
+  - WLAN ändern (danach Neustart)
+  - neue PIN (8 Ziffern)
+  - Bildschirmfoto
+  - Firmware-Update (Datei hochladen)
+- Die **PIN** wird beim ersten Start zufällig erzeugt. Sie steht nur am Gerät (Infoseite, Einrichtungsbildschirm).
+
 ## Himmel als Hintergrund
 Der Hintergrund folgt Tageszeit und Wetter:
 - Tagsüber blau bei klarem Himmel, grau bei Bewölkung, dunkelgrau bei Regen, violett-grau bei Gewitter, hell graublau bei Schnee
@@ -87,7 +135,7 @@ Der Hintergrund folgt Tageszeit und Wetter:
 - Morgen- und Abenddämmerung (je 50 Minuten vor und nach Sonnenauf- und -untergang) mit Übergang über ein warmes Orange, bei Bewölkung gedämpft
 - Karten auf dem Hintergrund wirken halbtransparent und folgen dem Verlauf.
 
-Die Helligkeit der Beleuchtung beträgt tagsüber 220 und nachts 60 (Werte in `config.h`).
+Die Helligkeit der Beleuchtung ist tagsüber 220 und nachts 60. Beides lässt sich auf der Webseite ändern.
 
 ## Aktualisierung
 
@@ -98,7 +146,8 @@ Die Helligkeit der Beleuchtung beträgt tagsüber 220 und nachts 60 (Werte in `c
 | Luftqualität und Pollen | 30 min | 1 min |
 | Radarbilder | beim Öffnen der Radarseite, wenn älter als 10 min | nächster Durchlauf |
 | Radarkarte | einmal nach dem Start | nächster Durchlauf |
-| Uhr und Hintergrund | jede Minute | – |
+| Uhr, Hintergrund, Nachtmodus | jede Minute | – |
+| Beste Zeit und Hinweise | mit jedem Wetterabruf | – |
 
 ## Wetterzustände
 
@@ -124,7 +173,8 @@ Beschreibung und Symbol ergeben sich aus dem WMO-Wettercode von Open-Meteo.
 
 ## Bekannte Grenzen
 
-- Kein Einstellungsmenü auf dem Gerät. WLAN und Ort werden im Quellcode eingetragen.
-- Nur ein Ort. Warnungen und Radar gibt es nur für Deutschland.
+- Einstellungen nur über die Webseite, nicht am Gerät selbst
+- Nur ein Ort Warnungen und Radar gibt es nur für Deutschland.
 - Texte nur auf Deutsch. Die Schriften enthalten ASCII, Latin-1 und typografische Zeichen wie „“ – … €.
-- Radaranimation und Regenhinweis bei tatsächlichem Regen sind bisher nicht am Gerät beobachtet worden, weil es während der Entwicklung trocken war.
+- Radaranimation und Regenhinweis bei tatsächlichem Regen sind bisher nicht am Gerät beobachtet worden, weil es während der Entwicklung trocken war. Dasselbe gilt für die meisten Hinweise auf der Seite „Draußen“; bisher kam nur der Wäschehinweis vor.
+- Die Bewertung für „Draußen“ und die Schwellen der Hinweise sind eigene Annahmen, keine offizielle Größe.

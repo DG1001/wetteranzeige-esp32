@@ -20,6 +20,7 @@ struct City {
   float lat, lon;
 };
 
+// Legt den Kartenausschnitt um den Ort fest; Karte und Bilder eines früheren Orts werden verworfen
 void begin(const Location& loc);
 // true, solange noch Karte oder Bilder fehlen bzw. veraltet sind
 bool needsLoad();

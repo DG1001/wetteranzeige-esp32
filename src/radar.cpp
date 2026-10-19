@@ -124,6 +124,13 @@ bool timeKnown() { return time(nullptr) > 1700000000; }
 }  // namespace
 
 void begin(const Location& loc) {
+  free(mapPixels);
+  mapPixels = nullptr;
+  for (auto& f : frames) {
+    free(f.png);
+    f = Frame();
+  }
+  loadedAt = 0;
   float lat = loc.lat, lon = loc.lon;
   float heightKm = MAP_WIDTH_KM * HEIGHT / WIDTH;
   float dLon = MAP_WIDTH_KM / (111.32f * cosf(lat * PI / 180));

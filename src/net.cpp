@@ -88,3 +88,17 @@ uint8_t* httpGetBytes(const String& url, size_t& len, size_t maxLen) {
   }
   return buf;
 }
+
+String urlEncode(const char* s) {
+  String out;
+  for (const uint8_t* p = (const uint8_t*)s; *p; p++) {
+    if (isalnum(*p) || *p == '-' || *p == '_' || *p == '.' || *p == '~') {
+      out += (char)*p;
+    } else {
+      char hex[4];
+      snprintf(hex, sizeof(hex), "%%%02X", *p);
+      out += hex;
+    }
+  }
+  return out;
+}

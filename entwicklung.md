@@ -110,10 +110,44 @@ Damit das Layout ohne Fotos vom Nutzer geprüft werden kann, gibt es Testbefehle
 ### Noch nicht am Gerät gesehen
 Während der Entwicklung war es trocken. Deshalb sind Radarbilder mit Niederschlag, der Regenhinweis bei Regen und die Animation von Regen und Schnee im großen Symbol am Display noch nicht beobachtet worden. Auch die Dämmerungsfarben wurden nur im Code geprüft.
 
+## 2026-10-19: Einrichtung und Updates über WLAN, Nachtmodus, beste Zeit draußen
+
+Gewünscht aus einer Liste von zwölf Vorschlägen: Einrichtung und Updates über WLAN, Nachtmodus und „Beste Zeit draußen“.
+
+### Entscheidungen
+- **Einstellungen im NVS statt im Quellcode.** Beim ersten Start werden `secrets.h` und `config.h` übernommen, damit das vorhandene Board ohne neue Einrichtung weiterlief. Gespeichert wird ein Block mit Versionsnummer, einfacher als einzelne Schlüssel.
+- **Eigenes Captive Portal statt WiFiManager:** Webserver und DNS gehören zum Arduino-Core, das Portal passt sich so an Aussehen und Sprache an, und Ort und WLAN sitzen in einem Formular.
+- **Schutz mit einer zufälligen 8-stelligen PIN**, die nur am Gerät angezeigt wird (Infoseite per langem Drücken, Einrichtungsbildschirm). Sie dient für die Webseite (Basic Auth), als Passwort des Hotspots und für ArduinoOTA. Damit kann im Heimnetz niemand ohne Zugang zum Gerät Einstellungen oder Firmware ändern. Wegen WPA2 sind genau 8 Ziffern vorgeschrieben.
+- **Zwei Wege für Updates:** Datei-Upload auf der Webseite für den Alltag, ArduinoOTA (`espota.py`) für die Entwicklung. Auf eine zweite PlatformIO-Umgebung für OTA wurde verzichtet, weil sie vermutlich einen neuen Hybrid-Build (15 Minuten) auslösen würde.
+- **Ortssuche per Name** (Open-Meteo-Geocoding, Treffer in Deutschland bevorzugt), damit niemand Koordinaten nachschlagen muss
+- **Bildschirmfoto über die Webseite** als 16-Bit-BMP direkt aus dem Bildspeicher: ohne Kodierung auf dem Gerät und viel schneller als über USB (3 s statt 17 s)
+- **Nachtmodus** als eigene Seite (schwarz, gedämpfte Farben) und nicht nur gedimmt, weil der helle Himmelsverlauf nachts stört. Jede Berührung weckt nur und löst sonst nichts aus.
+- **Draußen als eigene Wischseite** und zusätzlich als wechselnde Zeile auf der Übersicht, weil dort kein Platz für eine weitere Karte war
+- **Bewertung der Stunden:** Die erste Fassung nannte bei trübem, trockenem Wetter den ganzen Tag (8–19 Uhr). Jetzt zählen nur die Stunden nahe am Tagesbestwert, Sonne gibt einen kleinen Bonus und geschlossene Bewölkung einen Abzug. Ergebnis im selben Fall: 11–19 Uhr, also die wärmere Zeit.
+
+### Probleme und Lösungen
+| Problem | Ursache | Lösung |
+|---|---|---|
+| Absturz beim Start des Hotspots aus dem Normalbetrieb (`LoadProhibited` in `mdns join_group`) | mDNS griff auf die beim Umschalten abgebaute Netzwerkschnittstelle zu | mDNS und ArduinoOTA vorher beenden |
+| Hotspot aus dem Normalbetrieb hätte die Einstellungsseite geliefert | Routen doppelt registriert, der erste Handler gewinnt | Routen nur einmal registrieren, Handler unterscheiden nach Modus |
+| Webseite nicht erreichbar nach einem Neustart | Vermutlich kam das WLAN beim Start nicht zustande, das Board blieb im Hotspot | Im Hotspot ohne Client alle 30 s das gespeicherte WLAN versuchen, bei Erfolg neu starten (getestet) |
+| Erste Zeile des Einrichtungsbildschirms lief in den QR-Code | Layout | Kürzer, QR-Code kleiner |
+| USB-Wandler meldete sich mehrfach ab, esptool und pyserial hingen | Vermutlich Spannungseinbrüche bei hohem WLAN-Sendestrom über Kabel und Adapter; danach hing der Treiber am Mac | Kabel neu einstecken; Updates jetzt über WLAN. Einmal blieb das Board nach einem abgebrochenen USB-Upload im Bootloader, ein Reset half. |
+| USB-Upload dauerte zweimal etwa 15 Minuten | zeitgleich mit den USB-Abmeldungen; esptool wartete vermutlich auf den Port, nicht der Build | beobachten; über WLAN hochladen |
+
+### Getestet
+- Webseite: ohne PIN 401, mit PIN Formular; Ortssuche „Künzelsau“ ergibt 49,2818 / 9,6835; Bildschirmfoto als BMP
+- Update über WLAN mehrfach (`espota.py`), Einstellungen bleiben erhalten
+- Hotspot: Bildschirm mit QR-Code, automatische Rückkehr ins Heim-WLAN nach etwa 30 s
+- Seiten Draußen, Nacht und Info sowie die wechselnde Zeile per Bildschirmfoto
+- Noch nicht getestet: Einrichtung mit einem Handy über den Hotspot (Captive-Portal-Erkennung von iOS/Android), Firmware-Upload über das Formular der Webseite, der Nachtmodus über eine echte Nacht und die meisten Hinweise bei passendem Wetter
+
 ## Offene Punkte und Ideen
-- Radar, Regenhinweis und Regenanimation bei echtem Regen prüfen
+- Einrichtung mit dem Handy über den Hotspot ausprobieren
+- Firmware-Upload über die Webseite ausprobieren
+- Radar, Regenhinweis, Regenanimation und Hinweise bei echtem Regen, Frost oder Gewitter prüfen
 - Dämmerungsfarben am Gerät prüfen und bei Bedarf anpassen
-- Ort und WLAN ohne Neukompilieren ändern, z. B. über ein Einrichtungsportal oder eine Datei auf der SD-Karte
-- Updates über WLAN (OTA)
-- Nachtmodus mit nur großer Uhr oder ganz abgeschaltetem Display
+- Bewertung für „Draußen“ nach Erfahrung nachjustieren
+- Für den Dauerbetrieb ein USB-Netzteil statt des Mac-Ports verwenden
 - Zertifikate prüfen, statt `setInsecure()` zu verwenden
+- Weitere Ideen aus der Vorschlagsliste: Kocher-Pegel, Müllabfuhr und Kalender, DWD-Pollenflug, Gießhinweis, Wetterrückblick, PV-Prognose, Innenraumsensor, Smart Home

@@ -94,10 +94,12 @@ Raw readRaw(int& x, int& y) {
 constexpr int SWIPE_MIN = 90;      // Pixel waagerecht
 constexpr int TAP_MAX = 30;        // Pixel Bewegung
 constexpr uint32_t LOST_MS = 300;  // ohne Meldung gilt der Finger als losgelassen
+constexpr uint32_t LONG_MS = 2000;
 
 bool down = false;
+bool longReported = false;
 int startX, startY, lastX, lastY;
-uint32_t lastSeen;
+uint32_t lastSeen, downAt;
 
 }  // namespace
 
@@ -107,17 +109,26 @@ Gesture poll(int& x, int& y) {
   if (raw == Raw::Touched) {
     if (!down) {
       down = true;
+      longReported = false;
       startX = rx;
       startY = ry;
+      downAt = millis();
     }
     lastX = rx;
     lastY = ry;
     lastSeen = millis();
+    if (!longReported && millis() - downAt >= LONG_MS && abs(rx - startX) <= TAP_MAX && abs(ry - startY) <= TAP_MAX) {
+      longReported = true;
+      x = startX;
+      y = startY;
+      return Gesture::LongPress;
+    }
     return Gesture::None;
   }
   if (!down || (raw == Raw::NoData && millis() - lastSeen < LOST_MS)) return Gesture::None;
 
   down = false;
+  if (longReported) return Gesture::None;
   x = startX;
   y = startY;
   int dx = lastX - startX, dy = lastY - startY;

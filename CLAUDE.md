@@ -13,7 +13,8 @@ Die README nur anpassen, wenn sich Einrichtung, Build oder Struktur ändern.
 ## Bauen und Hochladen
 
 - PlatformIO liegt unter `~/.platformio/penv/bin/pio` (nicht im PATH).
-- `pio run -t upload --upload-port /dev/cu.usbserial-210`. Die Portnummer kann sich ändern, also mit `ls /dev/cu.usbserial*` prüfen.
+- Hochladen bevorzugt **über WLAN** mit `espota.py` (Befehl in `technisch.md`). Die PIN liefert der serielle Befehl `pin`; sie darf nicht in Dateien im Repository oder in Ausgaben landen.
+- Per USB: `pio run -t upload --upload-port /dev/cu.usbserial-210`. Die Portnummer kann sich ändern, also mit `ls /dev/cu.usbserial*` prüfen. Hängt esptool, ist meist der CH340-Treiber am Mac blockiert; dann den Nutzer bitten, das Kabel neu einzustecken.
 - Serielle Ausgabe mit 115200 Baud. Beim Mitlesen keine IP-Adressen oder WLAN-Daten ausgeben.
 - Layout prüfen mit Bildschirmfotos: Testbefehle `seite`, `tipp`, `wisch`, `warnung`, `foto` (siehe `technisch.md`) und `tools/screenshot.py`. Das Öffnen des Ports startet das Board meist neu; für mehrere Fotos den Port in einem Hintergrundprozess offen halten.
 - Ein Upload braucht den Port exklusiv, ein offener Monitor oder Hintergrundprozess muss vorher beendet werden.
@@ -24,3 +25,4 @@ Die README nur anpassen, wenn sich Einrichtung, Build oder Struktur ändern.
 - Die senkrechte Austastlücke (Back Porch 23, Front Porch 22) nicht verkürzen und den Bounce Buffer nicht vergrößern, sonst verschiebt sich das Bild unter Last um einige Zeilen.
 - PSRAM-Last klein halten: Gezeichnet wird in den unsichtbaren Bildspeicher, danach `lcd::show()`. Animationen erneuern nur ihren Ausschnitt und laufen mit höchstens etwa 12 Bildern/s.
 - `include/secrets.h` nie einchecken oder ausgeben.
+- Wird `struct Settings` geändert, `VERSION` in `settings.cpp` erhöhen. Die gespeicherten Einstellungen werden dann auf die Vorgaben zurückgesetzt, das WLAN muss also neu eingerichtet werden (oder kommt aus `secrets.h`).

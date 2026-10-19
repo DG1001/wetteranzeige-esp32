@@ -1,15 +1,36 @@
 #include "weather.h"
 
-#include "config.h"
 #include "net.h"
+#include "settings.h"
+
+bool geocode(const char* name, Location& loc) {
+  JsonDocument doc;
+  String url = "https://geocoding-api.open-meteo.com/v1/search?count=10&language=de&format=json&name=" + urlEncode(name);
+  if (!httpGetJson(url, doc)) return false;
+  JsonArray results = doc["results"];
+  if (results.size() == 0) return false;
+  JsonObject best = results[0];
+  for (JsonObject r : results) {
+    if (r["country_code"] == "DE") {
+      best = r;
+      break;
+    }
+  }
+  strlcpy(loc.city, best["name"] | name, sizeof(loc.city));
+  loc.lat = best["latitude"];
+  loc.lon = best["longitude"];
+  Serial.printf("Ort gefunden: %s (%.4f, %.4f)\n", loc.city, loc.lat, loc.lon);
+  return true;
+}
 
 bool locate(Location& loc) {
-  if (strlen(LOCATION_NAME) > 0) {
-    strlcpy(loc.city, LOCATION_NAME, sizeof(loc.city));
-    loc.lat = LOCATION_LAT;
-    loc.lon = LOCATION_LON;
+  if (settings.city[0] && (settings.lat != 0 || settings.lon != 0)) {
+    strlcpy(loc.city, settings.city, sizeof(loc.city));
+    loc.lat = settings.lat;
+    loc.lon = settings.lon;
     return true;
   }
+  if (settings.city[0]) return geocode(settings.city, loc);
   JsonDocument doc;
   if (!httpGetJson("http://ip-api.com/json/?fields=status,city,lat,lon&lang=de", doc)) return false;
   if (doc["status"] != "success") return false;
@@ -40,7 +61,7 @@ bool fetchWeather(const Location& loc, Weather& w) {
            "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,"
            "wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day,surface_pressure,uv_index"
            "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,"
-           "wind_speed_10m,wind_gusts_10m,is_day"
+           "wind_speed_10m,wind_gusts_10m,is_day,relative_humidity_2m"
            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,"
            "precipitation_sum,wind_gusts_10m_max,uv_index_max,sunrise,sunset,daylight_duration"
            "&minutely_15=precipitation&forecast_minutely_15=%d"
@@ -101,6 +122,7 @@ bool fetchWeather(const Location& loc, Weather& w) {
     if (strncmp(t, curTime, 13) == 0) w.nowHour = i;
     w.hTemp[i] = hourly["temperature_2m"][i];
     w.hProb[i] = hourly["precipitation_probability"][i] | 0;
+    w.hHumidity[i] = hourly["relative_humidity_2m"][i] | 0;
     w.hPrecip[i] = hourly["precipitation"][i] | 0.0f;
     w.hCode[i] = hourly["weather_code"][i] | 0;
     w.hWind[i] = hourly["wind_speed_10m"][i] | 0.0f;

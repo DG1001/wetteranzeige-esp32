@@ -50,6 +50,7 @@ struct Weather {
   uint8_t hDay[HOURS];  // Index in day[]
   uint8_t hCode[HOURS];
   uint8_t hProb[HOURS];
+  uint8_t hHumidity[HOURS];
   bool hIsDay[HOURS];
   float hTemp[HOURS];
   float hPrecip[HOURS];  // mm
@@ -64,8 +65,10 @@ struct Weather {
   float qPrecip[QUARTERS];  // mm je 15 Minuten
 };
 
-// Bestimmt den Standort über config.h oder die IP-Adresse
+// Bestimmt den Standort aus den Einstellungen: Koordinaten, sonst Ortsname, sonst IP-Adresse
 bool locate(Location& loc);
+// Sucht einen Ort per Name (Open-Meteo-Geocoding); bevorzugt Treffer in Deutschland
+bool geocode(const char* name, Location& loc);
 bool fetchWeather(const Location& loc, Weather& w);
 const char* weatherText(int code);
 // Kurzer Hinweis zum Regen der nächsten 2 Stunden, z. B. „Regen ab ca. 14:30“.

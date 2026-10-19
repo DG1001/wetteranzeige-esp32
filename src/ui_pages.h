@@ -19,5 +19,11 @@ void hours(const Model& m, const Theme& t);
 void day(const Model& m, const Theme& t);
 void skyAir(const Model& m, const Theme& t);
 void warnings(const Model& m, const Theme& t);
+void outdoor(const Model& m, const Theme& t);
+void night(const Model& m);  // eigener schwarzer Hintergrund, ohne Kopfzeile
+void info(const Model& m, const Theme& t);
+
+// Übersicht: wechselnde Zeile unter der Beschreibung
+constexpr int TICKER_X = 224, TICKER_Y = 240, TICKER_W = 272, TICKER_H = 28;
 
 }  // namespace ui

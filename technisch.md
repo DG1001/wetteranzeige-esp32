@@ -56,8 +56,11 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 
 | Datei | Aufgabe |
 |---|---|
-| `main.cpp` | Ablauf: WLAN, Abrufplan, Gesten, Seitenwechsel, Neuzeichnen und Animation, Testbefehle |
+| `main.cpp` | Ablauf: WLAN oder Einrichtungs-Hotspot, Abrufplan, Gesten, Nachtmodus, Seitenwechsel, Neuzeichnen und Animation, Testbefehle |
 | `model.h` | Gemeinsamer Zustand: Daten, aktuelle Seite, Status |
+| `settings.*` | Einstellungen im NVS, Vorgaben beim ersten Start, Nachtzeitraum |
+| `web.*` | Webseite, Captive Portal, Firmware-Update im Browser, ArduinoOTA, mDNS |
+| `outdoor.*` | Bewertung der Stunden, bestes Zeitfenster, Hinweise |
 | `lcd.*` | RGB-Treiber, zwei Bildspeicher, Teilbereiche sichern und wiederherstellen, Hintergrundbeleuchtung |
 | `touch.*` | GT911 und Gestenerkennung |
 | `net.*` | HTTP(S)-Abrufe für JSON und Binärdaten (PSRAM) |
@@ -70,7 +73,41 @@ Ergibt 828 × 529 Takte je Bild, also etwa 36 Bilder pro Sekunde.
 | `icons.*` | Wettersymbole, statisch und animiert |
 | `ui.*` | Seitensteuerung: Neuzeichnen, Animation, Antippen auswerten, Radaransicht |
 | `ui_common.*` | Schriften, Text mit Umbruch, Hintergrund mit Dithering, Glas-Karten, Kopfzeile, Temperaturkurve |
-| `ui_pages.*` | Übersicht, 48 Stunden, Tagesansicht, Himmel & Luft, Warnungen |
+| `ui_pages.*` | Übersicht, Draußen, 48 Stunden, Tagesansicht, Himmel & Luft, Warnungen, Nacht, Info |
+
+## Einstellungen (`src/settings.cpp`)
+
+- Gespeichert als ein Block (`struct Settings`) im NVS unter dem Namensraum `wetter`, mit Versionsnummer. Passen Version oder Größe nicht, werden die Vorgaben neu angelegt. **Wird `Settings` geändert, `VERSION` erhöhen.**
+- Vorgaben beim ersten Start: WLAN aus `include/secrets.h` (optional), Ort und Helligkeit aus `include/config.h`, Nachtmodus aus (22:30–6:30, gedimmte Uhr, Helligkeit 12), zufällige 8-stellige PIN (`esp_random`).
+- Ort: Name und Koordinaten. Sind die Koordinaten 0/0, wird der Name per Open-Meteo-Geocoding gesucht. Ohne Namen wird der Ort über die IP-Adresse bestimmt.
+
+## WLAN, Webseite und Updates (`src/web.cpp`)
+
+- **Normalbetrieb:** `WebServer` auf Port 80, mDNS-Name `wetteranzeige`. Alle Seiten mit HTTP-Basic-Auth (Benutzer `admin`, Passwort = PIN).
+  - `GET /`: Status und Formular; `POST /einstellungen` speichert. Danach baut ein Callback in `main.cpp` den Ort neu auf (Radar, Abrufe) und setzt die Helligkeit.
+  - `GET /foto.bmp`: BMP mit 16 Bit (BI_BITFIELDS, RGB565, von oben nach unten), zeilenweise aus dem sichtbaren Bildspeicher, Bytes getauscht. Etwa 3 s für 768 KB.
+  - `GET/POST /update`: Firmware-Upload mit der `Update`-Bibliothek, danach Neustart
+  - Ändert sich das WLAN, startet das Board neu.
+- **ArduinoOTA** (Port 3232, Passwort = PIN) für Uploads aus der Entwicklungsumgebung:
+  `python ~/.platformio/packages/framework-arduinoespressif32/tools/espota.py -i wetteranzeige.local -a PIN -f .pio/build/esp32-8048s043/firmware.bin -r`
+- **Einrichtungs-Hotspot** (Captive Portal): `WIFI_AP_STA`, SSID `Wetteranzeige`, WPA2 mit der PIN (deshalb genau 8 Ziffern), `DNSServer` beantwortet alle Namen mit 192.168.4.1, unbekannte Pfade werden dorthin umgeleitet, damit sich das Portal auf Handys von selbst öffnet. Gestartet wird er, wenn kein WLAN eingerichtet ist oder die Verbindung beim Start nicht innerhalb von 20 s klappt.
+  - Ohne verbundenen Client wird alle 30 s das gespeicherte WLAN versucht und bei Erfolg neu gestartet; nach 5 Minuten ohne Client ebenfalls Neustart.
+  - Vor dem Umschalten aus dem Normalbetrieb werden mDNS und ArduinoOTA beendet. Sonst stürzt die mDNS-Bibliothek ab (`join_group` auf eine abgebaute Netzwerkschnittstelle).
+  - Die Routen werden nur einmal registriert und unterscheiden im Handler zwischen Einrichtung und Normalbetrieb. Doppelt registrierte Routen würden sonst die falsche Seite liefern.
+- Die Partitionstabelle `default_16MB.csv` hat zwei App-Partitionen zu je 6,25 MB, wie für Updates nötig.
+
+## Nachtmodus (`src/main.cpp`)
+
+- `inNightWindow(minute)` prüft den Zeitraum, auch über Mitternacht. Nachts ist die Seite `Night` aktiv: schwarz, große Uhr in gedämpftem Grau, Temperatur, gegebenenfalls Warnung. Helligkeit `brightClock` oder 0 bei „Display aus“.
+- Jede Geste weckt nachts für 60 s (`wakeUntil`) und wird nicht weiter ausgewertet. Danach geht die Anzeige zurück in den Nachtmodus.
+- Keine Animation auf der Nachtseite, neu gezeichnet wird einmal pro Minute.
+
+## Draußen (`src/outdoor.cpp`)
+
+- Bewertung je Stunde, 0 bis 100: Basis 100, minus 0,8 × Regenwahrscheinlichkeit, −50 bei Regen ab 0,1 mm, Kälte −2,5 je Grad unter 15° (höchstens −35), Hitze −5 je Grad über 26° (höchstens −50), Wind −1,5 je km/h über 20, −20 bei Böen über 45 km/h, Gewitter −80, Schnee −30, Nebel −15, bedeckt −8, Sonne (Code 0/1) +5. Nachtstunden ergeben 0.
+- Zeitfenster: Schwelle = max(50, Tagesbestwert − 12). Gewählt wird der zusammenhängende Lauf über der Schwelle mit der größten Summe (Wert − Schwelle + 10). Tag: heute, wenn noch mindestens 2 Stunden Tageslicht bleiben, sonst morgen.
+- Hinweise: siehe [fachlich.md](fachlich.md), ausgewertet werden die nächsten 24 Stunden ab der aktuellen Stunde. Ausgewertet wird nach jedem Wetterabruf.
+- Wechselnde Zeile der Übersicht (`ui.cpp`): Regenhinweis, beste Zeit und Hinweise ab Wichtigkeit 5, Wechsel alle 6 s. Weil die Animation zwischen zwei Bildspeichern umschaltet, wird ein neuer Eintrag in **beide** Speicher gezeichnet (`tickerPending = 2`), sonst flackert die Zeile zwischen altem und neuem Text. Der Hintergrund der Zeile wird wie beim Wettersymbol gesichert und wiederhergestellt.
 
 ## Display-Ansteuerung (`src/lcd.cpp`)
 
@@ -95,6 +132,7 @@ Treiber ist `esp_lcd_new_rgb_panel` aus ESP-IDF:
 - Die Auflösung wird aus den Registern `0x8048`–`0x804B` gelesen (480×272) und auf 800×480 hochgerechnet.
 - Abfrage: Statusregister `0x814E` (Bit 7 = neue Daten, Bits 0–3 = Anzahl der Punkte), erster Punkt ab `0x8150`, danach Status auf 0 zurücksetzen. Eine Meldung mit 0 Punkten bedeutet „losgelassen“, als Rückfall gilt ein Finger nach 300 ms ohne Meldung als losgelassen.
 - Gesten beim Loslassen: **Wischen** bei mindestens 90 Pixeln waagerecht und mehr als doppelt so viel waagerecht wie senkrecht, **Tippen** bei höchstens 30 Pixeln Bewegung. Die Position ist der Startpunkt.
+- **Langes Drücken:** 2 s ohne Bewegung (höchstens 30 Pixel). Es wird schon während der Berührung gemeldet, das spätere Loslassen löst dann keine weitere Geste aus.
 
 ## Zeichnen
 
@@ -174,21 +212,25 @@ Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,l
 
 | Befehl | Wirkung |
 |---|---|
-| `seite N` | Seite N: 0 Übersicht, 1 Radar, 2 48 Stunden, 3 Himmel & Luft, 4 Tag, 5 Warnungen |
+| `seite N` | Seite N: 0 Übersicht, 1 Draußen, 2 Radar, 3 48 Stunden, 4 Himmel & Luft, 5 Tag, 6 Warnungen, 7 Nacht, 8 Info |
 | `tipp X Y` | Antippen simulieren |
 | `wisch l` / `wisch r` | Wischen nach links bzw. rechts |
+| `pin` | PIN ausgeben, z. B. für Tests der Webseite mit curl |
+| `einrichtung` | Einrichtungs-Hotspot starten, die Einstellungen bleiben erhalten |
 | `warnung B L` | Warnungen für Breite B und Länge L laden, z. B. für einen Ort mit aktueller Warnung |
 | `foto` | Bildschirmfoto: Zeile `FOTO 800 480`, Umschalten auf 460800 Baud, nach einem `G` vom Rechner 768 000 Bytes Rohdaten |
 
-`tools/screenshot.py PORT bild.png [befehl …]` holt ein Foto als PNG (benötigt pyserial und Pillow). Beim Öffnen des Ports startet das Board unter macOS meist neu (CH340, DTR/RTS). Für mehrere Fotos hintereinander ist daher ein Prozess besser, der den Port offen hält. Mit 921600 Baud gingen Daten verloren.
+`tools/screenshot.py PORT bild.png [befehl …]` holt ein Foto als PNG (benötigt pyserial und Pillow). Einfacher geht es im Heimnetz über `http://wetteranzeige.local/foto.bmp`. Beim Öffnen des Ports startet das Board unter macOS meist neu (CH340, DTR/RTS). Für mehrere Fotos hintereinander ist daher ein Prozess besser, der den Port offen hält. Mit 921600 Baud gingen Daten verloren.
 
 ## Ressourcen
 
-- RAM (statisch): ca. 63 KB von 320 KB
-- Flash: ca. 1,55 MB von 6,5 MB (App-Partition), davon etwa 345 KB Schriften
+- RAM (statisch): ca. 71 KB von 320 KB; zur Laufzeit etwa 220 KB interner Speicher frei
+- Flash: ca. 1,71 MB von 6,25 MB (App-Partition), davon etwa 345 KB Schriften
 - PSRAM: 2 × 768 KB Bildspeicher, 637 KB Radarkarte, 73 KB Symbol-Hintergrund, Radar-PNGs (etwa 200 KB), TLS- und JSON-Puffer
 
 ## Upload
 
-- `upload_speed = 460800`. Bei 921600 bricht esptool mit „Unable to verify flash chip connection“ ab.
+- **Über WLAN** (bevorzugt): Webseite `/update` oder `espota.py`, siehe oben
+- Über USB: `upload_speed = 460800`. Bei 921600 bricht esptool mit „Unable to verify flash chip connection“ ab.
 - USB-Seriell über CH340, am Mac `/dev/cu.usbserial-*`
+- **USB-Stabilität:** Der CH340 hat sich mehrmals kurz abgemeldet („Device not configured“), jeweils beim Verbindungsaufbau des WLANs oder beim Start des Hotspots, also bei hohem Sendestrom. Vermutlich sind das Spannungseinbrüche über Kabel und Adapter. Danach hing der Treiber am Mac (esptool und pyserial blockierten), bis das Kabel neu eingesteckt wurde. Einmal blieb das Board nach einem abgebrochenen USB-Upload im Bootloader.
