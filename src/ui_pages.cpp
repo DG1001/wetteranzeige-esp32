@@ -686,6 +686,7 @@ void info(const Model& m, const Theme& t) {
   text("Dort: Ort, Helligkeit, Nachtmodus, WLAN,", 34, 336, FONT_SMALL, t.dim);
   text("Bildschirmfoto und Firmware-Update.", 34, 360, FONT_SMALL, t.dim);
   text("Antippen: zurück", 34, 430, FONT_SMALL, t.dim);
+  text("Firmware " FIRMWARE_VERSION, 766, 430, FONT_SMALL, t.dim, top_right);
   snprintf(buf, sizeof(buf), "http://%s/", ip.c_str());
   canvas.fillSmoothRoundRect(520, 120, 240, 240, 12, 0xFFFFFFu);
   canvas.qrcode(buf, 530, 130, 220, 2, true);

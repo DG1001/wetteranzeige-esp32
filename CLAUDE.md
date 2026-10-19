@@ -16,6 +16,8 @@ Das Repository ist öffentlich: https://github.com/DG1001/wetteranzeige-esp32 (M
 - Vor jedem Commit und Push prüfen, dass keine PIN, WLAN-Namen, Passwörter oder lokale IP-Adressen enthalten sind.
 - Bildschirmfotos der Info- und der Einrichtungsseite nie einchecken, sie zeigen die PIN.
 - Commits laufen mit der GitHub-noreply-Adresse (lokal in `.git/config` gesetzt).
+- Jeder Push auf `main` baut in GitHub Actions; den Lauf mit `gh run watch` bzw. `gh run list` prüfen.
+- Neue Version: Tag `vX.Y.Z` setzen und pushen; das erzeugt ein Release und aktualisiert die Installationsseite (https://dg1001.github.io/wetteranzeige-esp32/). Versionsnummern nur nach Rücksprache mit dem Nutzer vergeben.
 
 ## Bauen und Hochladen
 

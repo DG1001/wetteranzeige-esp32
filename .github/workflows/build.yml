@@ -1,0 +1,133 @@
+name: Firmware
+
+# Baut die Firmware bei jedem Push und Pull Request. Bei einem Versions-Tag (v1.2.3) zusätzlich:
+# GitHub-Release mit den Firmware-Dateien und die Installationsseite auf GitHub Pages.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # für git describe
+
+      - name: Version bestimmen
+        id: version
+        run: echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Der erste Build lädt ESP-IDF und baut die Arduino-Bibliotheken neu (custom_sdkconfig, etwa 15 min).
+      # Gespeichert werden PlatformIO und die dabei im Projekt erzeugten Dateien.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            .pio
+            managed_components
+            sdkconfig.*
+            .dummy
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini', 'default_16MB.csv') }}
+
+      - name: PlatformIO installieren
+        run: pip install platformio
+
+      - name: Bauen
+        env:
+          FIRMWARE_VERSION: ${{ steps.version.outputs.version }}
+        run: pio run
+
+      - name: Dateien zusammenstellen
+        run: |
+          mkdir dist
+          v="${{ steps.version.outputs.version }}"
+          cp .pio/build/esp32-8048s043/firmware.bin "dist/wetteranzeige-$v.bin"
+          cp .pio/build/esp32-8048s043/firmware.factory.bin "dist/wetteranzeige-$v-komplett.bin"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: firmware
+          path: dist/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: firmware
+          path: dist
+
+      - name: Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<EOF
+          **Installieren:** im Browser unter https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          (Chrome oder Edge, Board per USB anschließen).
+
+          **Dateien**
+          - \`wetteranzeige-$TAG.bin\`: Update für ein Board, auf dem die Wetteranzeige schon läuft
+            (Webseite der Anzeige → Firmware-Update). Die Einstellungen bleiben erhalten.
+          - \`wetteranzeige-$TAG-komplett.bin\`: komplettes Abbild ab Adresse 0x0 (Bootloader, Partitionen,
+            Firmware), z. B. für \`esptool.py write_flash 0x0 …\`
+          EOF
+          gh release create "$TAG" dist/* --repo "${{ github.repository }}" --title "$TAG" \
+            --notes-file notes.md --generate-notes
+
+  pages:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: firmware
+          path: dist
+
+      - name: Installationsseite zusammenstellen
+        run: |
+          v="${{ needs.build.outputs.version }}"
+          mkdir site
+          cp web/index.html site/
+          cp docs/screenshots/uebersicht.png site/
+          cp "dist/wetteranzeige-$v-komplett.bin" site/firmware.bin
+          sed "s/__VERSION__/$v/" web/manifest.json > site/manifest.json
+          sed -i "s/__VERSION__/$v/g" site/index.html
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v5

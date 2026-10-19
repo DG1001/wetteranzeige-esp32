@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wetteranzeige installieren</title>
+<meta name="description" content="Wetteranzeige für das Sunton ESP32-8048S043 direkt im Browser installieren">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px 16px 48px;
+    background: linear-gradient(#16324f, #0b1a2b 480px) #0b1a2b;
+    color: #eef2f8; font: 17px/1.5 -apple-system, system-ui, "Segoe UI", sans-serif;
+  }
+  main { max-width: 760px; margin: auto; }
+  h1 { font-size: 1.8em; margin: .2em 0; }
+  h2 { font-size: 1.15em; margin-top: 2em; color: #a9c1db; }
+  a { color: #5aaeff; }
+  img { width: 100%; border-radius: 12px; margin: 16px 0; box-shadow: 0 6px 24px #0008; }
+  .box { background: #ffffff10; border-radius: 12px; padding: 14px 18px; }
+  .install { text-align: center; margin: 28px 0; }
+  .muted { color: #a9c1db; }
+  ol { padding-left: 1.3em; } li { margin: .4em 0; }
+  esp-web-install-button button[slot="activate"] {
+    font: inherit; font-weight: 600; font-size: 1.1em; padding: .8em 1.8em;
+    border: 0; border-radius: 10px; background: #ffc23d; color: #1a1a1a; cursor: pointer;
+  }
+  code { background: #ffffff18; padding: .1em .35em; border-radius: 5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Wetteranzeige</h1>
+  <p class="muted">für das Sunton-Board ESP32-8048S043 (4,3", 800×480, Touch) · Version __VERSION__</p>
+  <img src="uebersicht.png" alt="Übersichtsseite der Wetteranzeige">
+
+  <div class="install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Auf das Board installieren</button>
+      <span slot="unsupported">Dein Browser kann nicht auf USB-Geräte zugreifen. Bitte Chrome oder Edge
+        auf einem Computer verwenden (nicht auf dem Handy).</span>
+      <span slot="not-allowed">Die Installation braucht eine sichere Verbindung (https).</span>
+    </esp-web-install-button>
+  </div>
+
+  <h2>So geht's</h2>
+  <ol>
+    <li>Board mit einem <b>USB-A-auf-USB-C-Kabel</b> an den Computer anschließen. Mit einem
+      C-auf-C-Kabel bekommt dieses Board keinen Strom.</li>
+    <li>Auf „Auf das Board installieren“ klicken und den Anschluss wählen (meist „USB Serial“ bzw. „CH340“).
+      Bei einer Erstinstallation „Gerät löschen“ bestätigen. Das Übertragen dauert einige Minuten.</li>
+    <li>Danach zeigt das Display einen QR-Code: damit mit dem WLAN <b>„Wetteranzeige“</b> verbinden,
+      dann WLAN und Ort eintragen. Fertig.</li>
+  </ol>
+
+  <h2>Gut zu wissen</h2>
+  <div class="box">
+    <p>Die Einstellungen erreichst du später im Heimnetz unter <code>http://wetteranzeige.local</code>
+      (Benutzer <code>admin</code>, die PIN zeigt das Display nach 2 Sekunden Drücken). Dort gibt es auch
+      Updates: Datei <code>wetteranzeige-…bin</code> aus den
+      <a href="https://github.com/DG1001/wetteranzeige-esp32/releases">Releases</a> hochladen, die Einstellungen
+      bleiben erhalten.</p>
+    <p>Wird kein Anschluss angezeigt: anderes Kabel probieren (manche Kabel laden nur). Unter Windows braucht
+      der Wandler eventuell den CH340-Treiber. Klappt die Verbindung nicht, beim Klicken auf „Verbinden“ die
+      Taste <b>BOOT</b> am Board gedrückt halten.</p>
+    <p>Wetterwarnungen, Radar, Pollenflug und Biowetter gibt es nur für Deutschland.</p>
+  </div>
+
+  <h2>Quellcode und Doku</h2>
+  <p><a href="https://github.com/DG1001/wetteranzeige-esp32">github.com/DG1001/wetteranzeige-esp32</a>
+    · MIT-Lizenz · Daten von <a href="https://open-meteo.com">Open-Meteo</a> und dem
+    <a href="https://www.dwd.de">Deutschen Wetterdienst</a></p>
+</main>
+</body>
+</html>

@@ -24,6 +24,11 @@ struct Settings {
 
 extern Settings settings;
 
+// Wird beim Bauen aus Git gesetzt (tools/version.py)
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "unbekannt"
+#endif
+
 void loadSettings();
 void saveSettings();
 // Liegt die Minute (seit Mitternacht) im Nachtzeitraum? Der Zeitraum darf über Mitternacht gehen.

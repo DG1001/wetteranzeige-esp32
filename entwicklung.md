@@ -186,7 +186,20 @@ Gewünscht: Pollenflug und Biowetter vom DWD, Gießhinweis, Robustheit für den 
 - Fotos über USB: Während der Übertragung (etwa 17 s mit 460800 Baud) gehen Befehle verloren, die mit 115200 Baud ankommen. Deshalb vor dem nächsten Befehl auf das fertige Foto warten.
 - Vor der Veröffentlichung die Historie auf PIN, WLAN-Namen, Passwörter und IP-Adressen geprüft: nur der Platzhalter in `secrets.h.example` und die Standardadresse 192.168.4.1 des Hotspots
 
+## 2026-10-19: Releases über GitHub Actions und Installation im Browser
+
+Gewünscht: Flashen direkt im Browser und automatische Builds mit Releases.
+
+### Entscheidungen
+- **ESP Web Tools** (von ESPHome) für die Installationsseite: verbreitet, benutzt Web Serial, kein Server nötig, Hosting auf GitHub Pages. Eingerichtet wird nach der Installation über den vorhandenen Einrichtungs-Hotspot. Improv Serial (WLAN-Einrichtung direkt aus dem Browser) wäre eine Erweiterung.
+- **`firmware.factory.bin` aus dem Build** als Komplett-Abbild ab 0x0. pioarduino legt es schon an, ein eigenes `merge_bin` war nicht nötig.
+- **Versionsnummer aus Git** per PlatformIO-Skript statt von Hand. Die Änderung an `platformio.ini` hat den Bibliotheks-Neubau nicht ausgelöst.
+- **Releases nur bei Tags**, Builds bei jedem Push: So prüft jeder Push, dass alles baut, und veröffentlicht wird bewusst.
+- **Cache** für PlatformIO und die Hybrid-Build-Dateien, damit nicht jeder Lauf ESP-IDF lädt und die Bibliotheken neu baut
+
 ## Offene Punkte und Ideen
+- Installation im Browser mit einem frischen Board ausprobieren
+- Prüfen, ob der Cache in GitHub Actions den Bibliotheks-Neubau wirklich überspringt
 - Wischen während des Radar-Ladens am Gerät bestätigen
 - Einrichtung mit dem Handy über den Hotspot ausprobieren
 - Firmware-Upload über die Webseite ausprobieren

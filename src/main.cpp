@@ -275,7 +275,7 @@ void serialCommands() {
 
 void setup() {
   Serial.begin(115200);
-  logf("Start, Grund: %d, Firmware vom %s %s", (int)esp_reset_reason(), __DATE__, __TIME__);
+  logf("Start, Grund: %d, Firmware %s", (int)esp_reset_reason(), FIRMWARE_VERSION);
   loadSettings();
   if (!lcd::begin()) logf("Display konnte nicht initialisiert werden");
   lcd::setBrightness(settings.brightDay);

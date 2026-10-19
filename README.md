@@ -30,21 +30,31 @@ Bildschirmfotos direkt aus dem Bildspeicher des Displays (800×480).
 | ![Tagesansicht](docs/screenshots/tag.png) | ![Nacht](docs/screenshots/nacht.png) |
 | **Tagesansicht** nach Antippen einer Tageskachel | **Nachtmodus** mit gedimmter Uhr |
 
-## Voraussetzungen
+## Installieren ohne Programmieren
+
+Im Browser unter **https://dg1001.github.io/wetteranzeige-esp32/** (Chrome oder Edge auf einem Computer): Board per USB anschließen, auf „Installieren“ klicken, danach auf dem Display den QR-Code scannen und WLAN und Ort eintragen.
+
+Fertige Firmware-Dateien gibt es auch unter [Releases](https://github.com/DG1001/wetteranzeige-esp32/releases):
+- `wetteranzeige-vX.Y.Z.bin`: Update für ein Board, auf dem die Wetteranzeige schon läuft (auf der Webseite der Anzeige unter „Firmware-Update“). Die Einstellungen bleiben erhalten.
+- `wetteranzeige-vX.Y.Z-komplett.bin`: komplettes Abbild ab Adresse 0x0, z. B. für `esptool.py --chip esp32s3 write_flash 0x0 …`
+
+## Selbst bauen
+
+### Voraussetzungen
 
 - [PlatformIO](https://platformio.org) (CLI oder VS-Code-Erweiterung)
 - **USB-A-auf-USB-C-Kabel.** Mit einem C-auf-C-Kabel bekommt das Board keinen Strom, weil an der USB-C-Buchse die CC-Widerstände fehlen. Am Mac geht ein A-auf-C-Kabel mit Adapter.
 - WLAN mit 2,4 GHz (5 GHz kann der ESP32-S3 nicht)
 
-## Einrichtung
+### Einrichtung
 
-1. Firmware einmal per USB hochladen (siehe unten).
+1. Firmware einmal per USB hochladen (siehe unten) oder im Browser installieren (siehe oben).
 2. Ohne eingerichtetes WLAN öffnet die Anzeige einen Hotspot „Wetteranzeige“. Den QR-Code auf dem Display scannen oder mit dem angezeigten Passwort verbinden, dann WLAN und Ort eintragen.
 3. Danach gibt es die Webseite im Heimnetz unter `http://wetteranzeige.local`. Benutzer ist `admin`, die PIN steht am Gerät: **2 Sekunden auf das Display drücken**. Dort lassen sich Ort, DWD-Regionen, Helligkeit, Nachtmodus und WLAN einstellen, ein Bildschirmfoto holen, Firmware hochladen und unter „Status und Log“ der Zustand des Geräts ansehen.
 
 Optional lassen sich WLAN-Daten schon beim Bauen mitgeben. Dazu `include/secrets.h.example` nach `include/secrets.h` kopieren und ausfüllen. Die Datei steht in `.gitignore` und dient nur als Vorgabe beim allerersten Start. Ort und Helligkeit für den ersten Start stehen in `include/config.h`.
 
-## Bauen und Hochladen
+### Bauen und Hochladen
 
 ```sh
 pio run                                          # bauen
@@ -82,6 +92,9 @@ Alternativ auf der Webseite unter „Firmware-Update“ die Datei `.pio/build/es
 | `include/fonts/` | Erzeugte Schriften (nicht von Hand bearbeiten) |
 | `tools/make_vlw.py` | Erzeugt die Schriften aus DejaVu Sans |
 | `tools/screenshot.py` | Holt ein Bildschirmfoto über die serielle Schnittstelle |
+| `tools/version.py` | Übernimmt die Versionsnummer aus Git in die Firmware |
+| `web/` | Installationsseite (GitHub Pages) mit ESP Web Tools |
+| `.github/workflows/build.yml` | Build bei jedem Push, Release und Installationsseite bei Versions-Tags |
 | `docs/screenshots/` | Bildschirmfotos für diese README |
 
 ## Dokumentation

@@ -268,6 +268,16 @@ Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,l
 - Flash: ca. 1,8 MB von 6,25 MB (App-Partition), davon etwa 345 KB Schriften
 - PSRAM: 2 × 768 KB Bildspeicher, 637 KB Radarkarte, 73 KB Symbol-Hintergrund, Radar-PNGs (etwa 200 KB), TLS- und JSON-Puffer
 
+## Versionen, Build in GitHub Actions und Releases
+
+- **Versionsnummer:** `tools/version.py` (PlatformIO-Skript vor dem Bauen) setzt `FIRMWARE_VERSION` aus `git describe --tags --always --dirty`, in GitHub Actions aus der Umgebungsvariable. Sie steht im Log, auf der Status- und der Startseite der Webseite und auf der Infoseite des Displays.
+- **Workflow** `.github/workflows/build.yml`:
+  - `build`: bei jedem Push auf `main`, bei Pull Requests und von Hand. Er installiert PlatformIO, baut und legt `firmware.bin` und `firmware.factory.bin` als Artefakt ab. Der Cache (`actions/cache`) enthält `~/.platformio` und die vom Hybrid-Build im Projekt erzeugten Dateien (`.pio`, `managed_components`, `sdkconfig.*`, `.dummy`). Schlüssel ist der Hash von `platformio.ini` und der Partitionstabelle. Ohne Cache dauert der Build wegen ESP-IDF etwa 15–20 Minuten.
+  - `release` (nur bei Tags `v*`): GitHub-Release mit `wetteranzeige-<tag>.bin` (Update, ab 0x10000 bzw. über die Webseite) und `wetteranzeige-<tag>-komplett.bin` (= `firmware.factory.bin`, Bootloader, Partitionstabelle, `boot_app0` und Firmware ab 0x0)
+  - `pages` (nur bei Tags): Installationsseite auf GitHub Pages aus `web/` mit der Komplett-Datei als `firmware.bin`
+- **Installationsseite:** [ESP Web Tools](https://esphome.github.io/esp-web-tools/) 10.4.0 (Web Serial, Chrome/Edge). `web/manifest.json`: Chipfamilie ESP32-S3, ein Teil ab Offset 0, `new_install_prompt_erase`: Bei einer Erstinstallation wird gelöscht. Danach startet das Board ohne Einstellungen in den Einrichtungs-Hotspot. Wer bei einem vorhandenen Board „nicht löschen“ wählt, behält Einstellungen und PIN.
+- **Neue Version veröffentlichen:** `git tag v1.2.3 && git push origin v1.2.3`
+
 ## Upload
 
 - **Über WLAN** (bevorzugt): Webseite `/update` oder `espota.py`, siehe oben. `espota.py` meldet gelegentlich „Unexpected response from device“; ein zweiter Versuch klappt dann.

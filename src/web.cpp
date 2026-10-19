@@ -126,7 +126,8 @@ void handleRoot() {
     }
   }
   b += "</div><p><a href=/foto>Bildschirmfoto</a> · <a href=/status>Status und Log</a> · "
-       "<a href=/update>Firmware-Update</a></p>";
+       "<a href=/update>Firmware-Update</a></p><p><small>Firmware " FIRMWARE_VERSION
+       " · <a href=https://github.com/DG1001/wetteranzeige-esp32/releases>Neue Versionen</a></small></p>";
 
   b += "<form method=post action=/einstellungen>";
   b += "<h2>Ort</h2><label>Ortsname</label><input name=city value=\"" + esc(settings.city) +
@@ -317,8 +318,8 @@ void handleStatus() {
   uint32_t up = millis() / 1000;
   char line[200];
   String b = "<div class=box>";
-  snprintf(line, sizeof(line), "Laufzeit: %lu d %lu h %lu min<br>Letzter Start: %s<br>Firmware vom %s %s<br>",
-           up / 86400, up / 3600 % 24, up / 60 % 60, resetReason(), __DATE__, __TIME__);
+  snprintf(line, sizeof(line), "Laufzeit: %lu d %lu h %lu min<br>Letzter Start: %s<br>Firmware: %s<br>",
+           up / 86400, up / 3600 % 24, up / 60 % 60, resetReason(), FIRMWARE_VERSION);
   b += line;
   snprintf(line, sizeof(line), "Interner Speicher: %u KB frei (niedrigster Wert %u KB)<br>PSRAM: %u KB frei<br>",
            heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024, heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024,
@@ -347,7 +348,10 @@ void handleUpdatePage() {
   if (!authorized()) return;
   server.send(200, "text/html; charset=utf-8",
               page("Firmware-Update",
-                   "<p>Datei <code>firmware.bin</code> aus <code>.pio/build/esp32-8048s043/</code> auswählen.</p>"
+                   "<p>Installiert: " FIRMWARE_VERSION ". Neue Versionen gibt es unter "
+                   "<a href=https://github.com/DG1001/wetteranzeige-esp32/releases>GitHub-Releases</a>.</p>"
+                   "<p>Datei <code>firmware.bin</code> (aus dem Release bzw. aus <code>.pio/build/esp32-8048s043/</code>) "
+                   "auswählen; die Einstellungen bleiben erhalten.</p>"
                    "<form method=post action=/update enctype=multipart/form-data><input type=file name=firmware "
                    "accept=.bin><button>Hochladen</button></form><p><a href=/>Zurück</a></p>"));
 }
