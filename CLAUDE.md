@@ -10,6 +10,13 @@ Bei jeder Änderung am Projekt die drei Dokumente auf Deutsch aktualisieren:
 
 Die README nur anpassen, wenn sich Einrichtung, Build oder Struktur ändern.
 
+## Öffentliches Repository
+
+Das Repository ist öffentlich: https://github.com/DG1001/wetteranzeige-esp32 (MIT-Lizenz).
+- Vor jedem Commit und Push prüfen, dass keine PIN, WLAN-Namen, Passwörter oder lokale IP-Adressen enthalten sind.
+- Bildschirmfotos der Info- und der Einrichtungsseite nie einchecken, sie zeigen die PIN.
+- Commits laufen mit der GitHub-noreply-Adresse (lokal in `.git/config` gesetzt).
+
 ## Bauen und Hochladen
 
 - PlatformIO liegt unter `~/.platformio/penv/bin/pio` (nicht im PATH).
