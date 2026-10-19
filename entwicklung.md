@@ -197,9 +197,19 @@ Gewünscht: Flashen direkt im Browser und automatische Builds mit Releases.
 - **Releases nur bei Tags**, Builds bei jedem Push: So prüft jeder Push, dass alles baut, und veröffentlicht wird bewusst.
 - **Cache** für PlatformIO und die Hybrid-Build-Dateien, damit nicht jeder Lauf ESP-IDF lädt und die Bibliotheken neu baut
 
+### Probleme und Lösungen
+| Problem | Ursache | Lösung |
+|---|---|---|
+| Push abgelehnt: „refusing to allow an OAuth App to create or update workflow“ | Dem Token der GitHub-CLI fehlte die Berechtigung `workflow` | Nutzer hat `gh auth refresh -s workflow` ausgeführt |
+| Pages-Job nach 2 s fehlgeschlagen | Die Umgebung `github-pages` erlaubte nur Veröffentlichungen von `main`, der Lauf kam vom Tag `v1.0.0` | Regel für Tags `v*` ergänzt, Job neu gestartet |
+
+### Ergebnis
+- Erster Build ohne Cache: knapp 11 Minuten; Release-Build mit Cache: 2 Minuten
+- Release v1.0.0 mit Update- und Komplett-Datei, Installationsseite https://dg1001.github.io/wetteranzeige-esp32/ online
+- Die in GitHub Actions gebaute Update-Datei per WLAN auf das Board gespielt: läuft als v1.0.0, alle Datenquellen erfolgreich
+
 ## Offene Punkte und Ideen
 - Installation im Browser mit einem frischen Board ausprobieren
-- Prüfen, ob der Cache in GitHub Actions den Bibliotheks-Neubau wirklich überspringt
 - Wischen während des Radar-Ladens am Gerät bestätigen
 - Einrichtung mit dem Handy über den Hotspot ausprobieren
 - Firmware-Upload über die Webseite ausprobieren

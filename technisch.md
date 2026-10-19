@@ -276,7 +276,9 @@ Nur wenn `LOCATION_NAME` leer ist: `http://ip-api.com/json/?fields=status,city,l
   - `release` (nur bei Tags `v*`): GitHub-Release mit `wetteranzeige-<tag>.bin` (Update, ab 0x10000 bzw. über die Webseite) und `wetteranzeige-<tag>-komplett.bin` (= `firmware.factory.bin`, Bootloader, Partitionstabelle, `boot_app0` und Firmware ab 0x0)
   - `pages` (nur bei Tags): Installationsseite auf GitHub Pages aus `web/` mit der Komplett-Datei als `firmware.bin`
 - **Installationsseite:** [ESP Web Tools](https://esphome.github.io/esp-web-tools/) 10.4.0 (Web Serial, Chrome/Edge). `web/manifest.json`: Chipfamilie ESP32-S3, ein Teil ab Offset 0, `new_install_prompt_erase`: Bei einer Erstinstallation wird gelöscht. Danach startet das Board ohne Einstellungen in den Einrichtungs-Hotspot. Wer bei einem vorhandenen Board „nicht löschen“ wählt, behält Einstellungen und PIN.
-- **Neue Version veröffentlichen:** `git tag v1.2.3 && git push origin v1.2.3`
+- **Neue Version veröffentlichen:** `git tag -a v1.2.3 -m "…" && git push origin v1.2.3`
+- **Dauer:** erster Build ohne Cache knapp 11 Minuten, mit Cache etwa 2 Minuten. Der Cache überspringt also auch den Neubau der Bibliotheken.
+- **GitHub Pages:** Quelle „GitHub Actions“. Die Umgebung `github-pages` erlaubt Veröffentlichungen standardmäßig nur von `main`. Für Tags ist zusätzlich die Regel `v*` (Typ Tag) eingetragen, ohne sie schlug der Pages-Job fehl.
 
 ## Upload
 
