@@ -100,7 +100,7 @@ void mapLabels(const Model& m) {
     }
     return true;
   };
-  used[usedCount++] = {8, MAP_Y + 6, 250, 56};  // Titel oben links
+  used[usedCount++] = {8, MAP_Y + 6, 284, 56};  // Titel oben links
 
   int hx, hy;
   if (radar::project(m.loc.lat, m.loc.lon, hx, hy)) {
@@ -170,7 +170,7 @@ void timeline(const Model& m, int frame) {
 
 void radarView(const Model& m, int frame) {
   radar::draw(canvas, MAP_Y, frame);
-  canvas.fillSmoothRoundRect(8, MAP_Y + 6, 250, 56, 10, 0x0B1220u);
+  canvas.fillSmoothRoundRect(8, MAP_Y + 6, 284, 56, 10, 0x0B1220u);
   text("Regenradar", 22, MAP_Y + 12, FONT_TITLE, 0xFFFFFFu);
   text("Daten: Deutscher Wetterdienst", 22, MAP_Y + 38, FONT_SMALL, 0x9AA6B8u);
   mapLabels(m);

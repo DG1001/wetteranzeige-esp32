@@ -178,6 +178,14 @@ Gewünscht: Pollenflug und Biowetter vom DWD, Gießhinweis, Robustheit für den 
 - 22 MHz: Bild steht auf Übersicht und Radar (Nutzer)
 - Noch nicht gesehen: Wischen während des Radar-Ladens am Gerät (die Ursache ist behoben, eine Rückmeldung fehlt noch), Hinweise zu Pollen, Biowetter und Gießen bei passender Lage, ein Neustart durch Watchdog oder Überwachung im echten Betrieb
 
+## 2026-10-19: Bildschirmfotos in der README, Vorbereitung für GitHub
+
+- Acht Bildschirmfotos aller Seiten (außer Info- und Einrichtungsseite, die zeigen die PIN) in `docs/screenshots/`, als Galerie in der README
+- Lizenztext von DejaVu beigelegt (`include/fonts/LICENSE-DejaVu.txt`), weil die erzeugten Schriften mit veröffentlicht werden
+- Titelkasten der Radarseite verbreitert, „Daten: Deutscher Wetterdienst“ ragte heraus
+- Fotos über USB: Während der Übertragung (etwa 17 s mit 460800 Baud) gehen Befehle verloren, die mit 115200 Baud ankommen. Deshalb vor dem nächsten Befehl auf das fertige Foto warten.
+- Vor der Veröffentlichung die Historie auf PIN, WLAN-Namen, Passwörter und IP-Adressen geprüft: nur der Platzhalter in `secrets.h.example` und die Standardadresse 192.168.4.1 des Hotspots
+
 ## Offene Punkte und Ideen
 - Wischen während des Radar-Ladens am Gerät bestätigen
 - Einrichtung mit dem Handy über den Hotspot ausprobieren

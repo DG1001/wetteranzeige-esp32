@@ -15,6 +15,21 @@ Wetterstation für das Sunton-Board **ESP32-8048S043** (ESP32-S3, 4,3"-Display m
 
 Bedienung per Wischen und Antippen (siehe [fachlich.md](fachlich.md)). Die Daten kommen über WLAN von [Open-Meteo](https://open-meteo.com) und vom [Deutschen Wetterdienst](https://www.dwd.de), API-Schlüssel sind nicht nötig.
 
+## Bildschirme
+
+Bildschirmfotos direkt aus dem Bildspeicher des Displays (800×480).
+
+| | |
+|---|---|
+| ![Übersicht](docs/screenshots/uebersicht.png) | ![Draußen](docs/screenshots/draussen.png) |
+| **Übersicht:** animiertes Wettersymbol, Regenhinweis, 24 Stunden, 6 Tage | **Draußen:** beste Zeit für draußen und Hinweise |
+| ![Regenradar](docs/screenshots/radar.png) | ![48 Stunden](docs/screenshots/stunden.png) |
+| **Regenradar** des DWD mit 1 Stunde Vergangenheit und 2 Stunden Vorhersage | **48 Stunden:** Symbole, Temperatur, Regen, Wind und Böen |
+| ![Himmel & Luft](docs/screenshots/himmel.png) | ![Gesundheit](docs/screenshots/gesundheit.png) |
+| **Himmel & Luft:** Sonnenbogen, Mondphase, UV-Index, Luftqualität, Wasserbilanz für den Garten | **Gesundheit:** Pollenflug und Biowetter des DWD |
+| ![Tagesansicht](docs/screenshots/tag.png) | ![Nacht](docs/screenshots/nacht.png) |
+| **Tagesansicht** nach Antippen einer Tageskachel | **Nachtmodus** mit gedimmter Uhr |
+
 ## Voraussetzungen
 
 - [PlatformIO](https://platformio.org) (CLI oder VS-Code-Erweiterung)
@@ -67,6 +82,7 @@ Alternativ auf der Webseite unter „Firmware-Update“ die Datei `.pio/build/es
 | `include/fonts/` | Erzeugte Schriften (nicht von Hand bearbeiten) |
 | `tools/make_vlw.py` | Erzeugt die Schriften aus DejaVu Sans |
 | `tools/screenshot.py` | Holt ein Bildschirmfoto über die serielle Schnittstelle |
+| `docs/screenshots/` | Bildschirmfotos für diese README |
 
 ## Dokumentation
 
@@ -82,4 +98,4 @@ Alternativ auf der Webseite unter „Firmware-Update“ die Datei `.pio/build/es
 
 ## Schriften
 
-Die Schriften in `include/fonts/` werden aus **DejaVu Sans** erzeugt (Bitstream Vera License, Änderungen von DejaVu gemeinfrei). Neu erzeugen geht mit `python3 tools/make_vlw.py`. Dafür werden Pillow und matplotlib gebraucht, weil matplotlib die DejaVu-Dateien mitliefert.
+Die Schriften in `include/fonts/` werden aus **DejaVu Sans** erzeugt (Bitstream Vera License, Änderungen von DejaVu gemeinfrei, Lizenztext in [`include/fonts/LICENSE-DejaVu.txt`](include/fonts/LICENSE-DejaVu.txt)). Neu erzeugen geht mit `python3 tools/make_vlw.py`. Dafür werden Pillow und matplotlib gebraucht, weil matplotlib die DejaVu-Dateien mitliefert.
