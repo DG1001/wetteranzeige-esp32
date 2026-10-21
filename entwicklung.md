@@ -227,10 +227,38 @@ Beim Anstecken an ein USB-Netzteil (5 V, 8 A gesamt, fünf USB-A-Buchsen) raucht
 | Diagnose | U5 ausgelötet (Kurzschluss im Baustein). Danach wird nichts mehr warm, das Board startet normal: Startgrund Einschalten, Touch erkannt, WLAN verbunden, Wetter, Warnungen und Pollenflug geladen, Speicher normal. Ohne Beleuchtung ist das Bild auch mit Taschenlampe nicht zu sehen. Die PIN wurde deshalb seriell ausgelesen. |
 | Älterer Brandfleck | Der Fleck neben R3, R4 und R17 am Touch-Stecker stammt von früher und hat keine Auswirkungen. |
 
-**Weiteres Vorgehen:** Typ von U5 an einem zweiten, intakten Board ablesen und den Baustein ersetzen. Beim neuen Board erst das Kabel ins Board stecken, dann ins Netzteil.
+**Weiteres Vorgehen:** Ein neues Board kostet inzwischen mindestens 37 €, deshalb soll U5 ersetzt werden. Weil der Typ unbekannt ist, wird die Belegung der Lötflächen gemessen und dazu ein pinkompatibler LED-Treiber gesucht (Kandidaten im gleichen Gehäuse: AP3031, PT4103, MP3302; Belegung jeweils prüfen). Beim Wiederanschließen erst das Kabel ins Board stecken, dann ins Netzteil.
+
+### Stand der Lötflächen von U5
+Nummerierung wie auf der Platine gesehen (Beschriftung lesbar, Dreieck oben links = Pin 1, Zählung gegen den Uhrzeigersinn):
+
+```
+      ▷
+    1 □   □ 6
+    2 □ ● □ 5
+    3 □   □ 4
+```
+
+- Fläche 2 ist beim Auslöten abgerissen, ihre Leiterbahn führt nach links. Beim Einlöten das Beinchen auf die Leiterbahn löten oder mit Draht zum nächsten Bauteil auf derselben Leitung verbinden.
+- Der dunkle Punkt in der Mitte (●) ist ein Brandfleck.
+- Bauteile in der Umgebung, aus der Beschriftung gelesen und noch nicht gemessen:
+  - R12 „1R5“ oder „5R1“ (1,5 oder 5,1 Ω), vermutlich der Messwiderstand für den LED-Strom
+  - R11 „101“ (100 Ω)
+  - R13 „0“ (0-Ω-Brücke) und R14 „103“ (10 kΩ), vermutlich Schalteingang von GPIO2 mit Widerstand nach Masse
+  - R10 nicht bestückt
+- L1 10 µH, D2 SS14 (laut Rekonstruktion, siehe oben)
+
+**Noch zu messen** (Board stromlos, Multimeter auf Durchgang): Für jede Fläche 1–6 festhalten, womit sie Verbindung hat. Bei Fläche 2 am Ende ihrer Leiterbahn messen.
+- L1: welches Ende
+- D2: Ende ohne oder mit Strich
+- GND, z. B. an P4
+- 5 V, Kontakt „5V“ an P1
+- R11, R12, R13, R14: welches Ende
+
+Danach den Baustein auswählen und prüfen, ob er die Helligkeitsregelung mit 20 kHz am Schalteingang verträgt. Sonst die PWM-Frequenz in `lcd.cpp` anpassen.
 
 ## Offene Punkte und Ideen
-- **U5 ersetzen:** Typ an einem zweiten Board ablesen, danach Bild, Helligkeitsregelung (PWM 20 kHz gegen das Datenblatt prüfen) und Nachtmodus testen
+- **U5 ersetzen:** Belegung der Lötflächen messen (Anleitung im Abschnitt vom 2026-10-21), passenden Baustein bestellen und einlöten, danach Bild, Helligkeitsregelung (PWM 20 kHz gegen das Datenblatt prüfen) und Nachtmodus testen
 - **Flackern im Dauerbetrieb** mit neuem U5 und gutem Netzteil beobachten; wenn es bleibt, 64 KB Daten-Cache einbauen
 - Installation im Browser mit einem frischen Board ausprobieren
 - Wischen während des Radar-Ladens am Gerät bestätigen
