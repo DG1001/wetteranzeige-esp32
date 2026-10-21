@@ -10,6 +10,7 @@ Sunton **ESP32-8048S043** (Platinenaufdruck „…F1 V1.2“, Variante mit kapaz
 | Display | 4,3", 800×480, 16-Bit-RGB-Schnittstelle (RGB565) |
 | Touch | Goodix GT911 über I²C, auf **480×272** eingestellt (nicht 800×480) |
 | USB | USB-C mit Seriell-Wandler CH340, **keine CC-Widerstände** (siehe [README](README.md)) |
+| Stromversorgung | 5 V vom USB; zwei AMS1117 (U3, U4) für 3,3 V; Aufwärtswandler **U5** (SOT-23-6, mit L1, D2, C13/C14/C18/C19) für die LED-Kette der Hintergrundbeleuchtung, geschaltet über GPIO2. Typ von U5 unbekannt. Laut [macsbug](https://macsbug.wordpress.com/2022/11/29/esp32-8048s043/) trägt er die Beschriftung `KDE2H`, schaltet mit etwa 1,2 MHz und liefert etwa 15,6 V für die LEDs. L1 hat laut einer [Rekonstruktion](https://github.com/AIDevelopersMonster/ESP32-8048S043-lab/blob/main/hardware/SCHEMATIC_BOM_RESEARCH.md) 10 µH, D2 ist eine SS14. Einen Schutz gegen Spannungsspitzen am USB-Eingang gibt es offenbar nicht. |
 | Sonstiges | microSD-Steckplatz, Tasten BOOT und RST |
 
 ### Pinbelegung

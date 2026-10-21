@@ -208,7 +208,30 @@ Gewünscht: Flashen direkt im Browser und automatische Builds mit Releases.
 - Release v1.0.0 mit Update- und Komplett-Datei, Installationsseite https://dg1001.github.io/wetteranzeige-esp32/ online
 - Die in GitHub Actions gebaute Update-Datei per WLAN auf das Board gespielt: läuft als v1.0.0, alle Datenquellen erfolgreich
 
+## 2026-10-21: Flackern im Dauerbetrieb, Ausfall des Beleuchtungswandlers U5
+
+### Flackern nach längerer Laufzeit
+Der Nutzer sah an einem anderen Aufstellort wieder einzelne flackernde Pixel und Linien am linken Rand, auch auf der Seite Gesundheit (Biowetter). Direkt nach dem Start trat es nicht auf, erst nach einiger Laufzeit. Am Mac war es mit derselben Firmware (v1.0.0) weg gewesen.
+
+- **Vermutung Software:** Der Bounce Buffer wird verspätet gefüllt. Der Treiber lädt nach jedem Füllen die nächsten 16 KB Bild per `Cache_Start_DCache_Preload` in den Daten-Cache. Bei 32 KB Cache verdrängen der Abruf-Task (TLS, PNG, JSON) und das Zeichnen diese Daten. Bei 22 MHz ist weniger Reserve als bei den 16 MHz, mit denen das Flackern ursprünglich behoben wurde.
+- **Vorbereitet, nicht gebaut:** `CONFIG_ESP32S3_DATA_CACHE_64KB` (von Espressif für RGB-Displays empfohlen). Das kostet 32 KB internen RAM, der niedrigste beobachtete Wert lag bei 72 KB frei. Zurückgestellt, um zuerst die Stromversorgung als Ursache auszuschließen.
+- Ob das Flackern mit der Stromversorgung oder dem späteren Ausfall von U5 zusammenhing, ist offen.
+
+### Ausfall von U5
+Beim Anstecken an ein USB-Netzteil (5 V, 8 A gesamt, fünf USB-A-Buchsen) rauchte U5, der Aufwärtswandler für die Hintergrundbeleuchtung. An der Powerbank, an der das Board vorher lief, rauchte er weiter, das Display blieb dunkel. Das Netzteil ist in Ordnung, an derselben Buchse läuft ein anderes Gerät normal.
+
+| Frage | Ergebnis |
+|---|---|
+| Ursache | Nicht mehr feststellbar. In Frage kommen eine Spannungsspitze beim Einstecken (kräftiges Netzteil, Kabelinduktivität und Keramikkondensatoren am Eingang, kein erkennbarer Überspannungsschutz) oder ein schon vorgeschädigter Baustein. Die fehlenden CC-Widerstände am USB-C scheiden aus: Über USB-A wird nichts ausgehandelt, es kommen immer 5 V. Die Firmware kann über GPIO2 nur einige Milliampere treiben. |
+| Typ von U5 | Beschriftung verbrannt, kein Original-Schaltplan gefunden. [macsbug](https://macsbug.wordpress.com/2022/11/29/esp32-8048s043/) nennt die Beschriftung `KDE2H` (vermutet LT1930, mit Fragezeichen), etwa 1,2 MHz und 15,6 V an den LEDs. Zu `KDE2H` war kein Baustein zu finden. Der SY7200AABC vom 5"-Board ES3C50P ([Handbuch von LCDWiki](https://www.lcdwiki.com/res/ES3C50P/5inch_ESP32-S3_User_Manual.pdf)) trägt laut Silergy die Beschriftung `HY…`, passt also nicht. Nächster Schritt: Belegung der leeren Lötflächen bestimmen und einen pinkompatiblen LED-Treiber suchen. |
+| Diagnose | U5 ausgelötet (Kurzschluss im Baustein). Danach wird nichts mehr warm, das Board startet normal: Startgrund Einschalten, Touch erkannt, WLAN verbunden, Wetter, Warnungen und Pollenflug geladen, Speicher normal. Ohne Beleuchtung ist das Bild auch mit Taschenlampe nicht zu sehen. Die PIN wurde deshalb seriell ausgelesen. |
+| Älterer Brandfleck | Der Fleck neben R3, R4 und R17 am Touch-Stecker stammt von früher und hat keine Auswirkungen. |
+
+**Weiteres Vorgehen:** Typ von U5 an einem zweiten, intakten Board ablesen und den Baustein ersetzen. Beim neuen Board erst das Kabel ins Board stecken, dann ins Netzteil.
+
 ## Offene Punkte und Ideen
+- **U5 ersetzen:** Typ an einem zweiten Board ablesen, danach Bild, Helligkeitsregelung (PWM 20 kHz gegen das Datenblatt prüfen) und Nachtmodus testen
+- **Flackern im Dauerbetrieb** mit neuem U5 und gutem Netzteil beobachten; wenn es bleibt, 64 KB Daten-Cache einbauen
 - Installation im Browser mit einem frischen Board ausprobieren
 - Wischen während des Radar-Ladens am Gerät bestätigen
 - Einrichtung mit dem Handy über den Hotspot ausprobieren
